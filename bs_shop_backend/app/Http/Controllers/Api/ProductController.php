@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -27,14 +28,14 @@ class ProductController extends Controller
             $cacheKey = 'products_index_' . md5(serialize($request->all()));
             
             // Vérifier le cache d'abord
-            $cachedResult = Cache::remember($cacheKey, 300, function () use ($request) {
-                // Construire la requête de base
-                $query = Product::with(['category' => function ($categoryQuery) {
-                        $categoryQuery->with('parent'); // Charger aussi la catégorie parente
-                    }, 'variants' => function ($variantQuery) {
-                        $variantQuery->where('is_active', true);
-                    }])
-                    ->where('is_active', true);
+            // Cache désactivé temporairement - exécution directe
+            // Construire la requête de base
+            $query = Product::with(['category' => function ($categoryQuery) {
+                    $categoryQuery->with('parent'); // Charger aussi la catégorie parente
+                }, 'variants' => function ($variantQuery) {
+                    $variantQuery->where('is_active', true);
+                }])
+                ->where('is_active', true);
 
             // Filtre par catégorie principale
             if ($request->has('category_id') && $request->category_id) {
@@ -100,7 +101,7 @@ class ProductController extends Controller
                     'slug' => $product->slug,
                     'description' => Str::limit($product->description, 150),
                     'base_price' => $product->base_price,
-                    'image_main' => $product->image_main ? asset('storage/' . $product->image_main) : null,
+                    'image_main' => $product->image_main,
                     'category' => [
                         'id' => $product->category->id,
                         'name' => $product->category->name,
@@ -123,25 +124,24 @@ class ProductController extends Controller
                 ];
             });
 
-                // Formater la réponse avec pagination
-                return [
-                    'success' => true,
-                    'message' => 'Produits récupérés avec succès',
-                    'data' => [
-                        'products' => $formattedProducts,
-                        'pagination' => [
-                            'current_page' => $products->currentPage(),
-                            'last_page' => $products->lastPage(),
-                            'per_page' => $products->perPage(),
-                            'total' => $products->total(),
-                            'from' => $products->firstItem(),
-                            'to' => $products->lastItem()
-                        ]
+            // Formater la réponse avec pagination
+            $result = [
+                'success' => true,
+                'message' => 'Produits récupérés avec succès',
+                'data' => [
+                    'products' => $formattedProducts,
+                    'pagination' => [
+                        'current_page' => $products->currentPage(),
+                        'last_page' => $products->lastPage(),
+                        'per_page' => $products->perPage(),
+                        'total' => $products->total(),
+                        'from' => $products->firstItem(),
+                        'to' => $products->lastItem()
                     ]
-                ];
-            });
+                ]
+            ];
 
-            return response()->json($cachedResult, 200);
+            return response()->json($result, 200);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -164,20 +164,20 @@ class ProductController extends Controller
             // Cache pour un produit spécifique
             $cacheKey = "product_show_{$id}";
             
-            $cachedResult = Cache::remember($cacheKey, 600, function () use ($id) {
-                // Récupérer le produit avec toutes ses relations
-                $product = Product::with([
-                    'category' => function ($query) {
-                        $query->with('parent'); // Charger aussi la catégorie parente
-                    },
-                    'variants' => function ($query) {
-                        $query->where('is_active', true)
-                              ->orderBy('sort_order');
-                    },
-                    'images' => function ($query) {
-                        $query->orderBy('sort_order');
-                    }
-                ])->find($id);
+            // Cache désactivé temporairement - exécution directe
+            // Récupérer le produit avec toutes ses relations
+            $product = Product::with([
+                'category' => function ($query) {
+                    $query->with('parent'); // Charger aussi la catégorie parente
+                },
+                'variants' => function ($query) {
+                    $query->where('is_active', true)
+                          ->orderBy('sort_order');
+                },
+                'images' => function ($query) {
+                    $query->orderBy('sort_order');
+                }
+            ])->find($id);
 
             // Vérifier si le produit existe
             if (!$product) {
@@ -202,7 +202,7 @@ class ProductController extends Controller
                 'slug' => $product->slug,
                 'description' => $product->description,
                 'base_price' => $product->base_price,
-                'image_main' => $product->image_main ? asset('storage/' . $product->image_main) : null,
+                'image_main' => $product->image_main,
                 'category' => [
                     'id' => $product->category->id,
                     'name' => $product->category->name,
@@ -232,7 +232,7 @@ class ProductController extends Controller
                 'images' => $product->images->map(function ($image) {
                     return [
                         'id' => $image->id,
-                        'media_path' => asset('storage/' . $image->media_path),
+                        'media_path' => $image->media_path,
                         'media_type' => $image->media_type,
                         'alt_text' => $image->alt_text,
                         'title' => $image->title,
@@ -242,7 +242,7 @@ class ProductController extends Controller
                 'videos' => $product->videos->map(function ($video) {
                     return [
                         'id' => $video->id,
-                        'media_path' => asset('storage/' . $video->media_path),
+                        'media_path' => $video->media_path,
                         'alt_text' => $video->alt_text,
                         'title' => $video->title,
                         'sort_order' => $video->sort_order
@@ -264,14 +264,13 @@ class ProductController extends Controller
                 'updated_at' => $product->updated_at
             ];
 
-                return [
-                    'success' => true,
-                    'message' => 'Produit récupéré avec succès',
-                    'data' => $formattedProduct
-                ];
-            });
+            $result = [
+                'success' => true,
+                'message' => 'Produit récupéré avec succès',
+                'data' => $formattedProduct
+            ];
 
-            return response()->json($cachedResult, 200);
+            return response()->json($result, 200);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -349,18 +348,24 @@ class ProductController extends Controller
                 $counter++;
             }
 
-            // Traitement de l'image principale
-            $imagePath = null;
+            // Traitement de l'image principale avec Cloudinary
+            $imageUrl = null;
+            $cloudinaryService = new CloudinaryService();
             
             // Vérifier si c'est une image base64
             if ($request->has('image_main') && $request->image_main && is_string($request->image_main)) {
-                $imagePath = $this->saveBase64Image($request->image_main, 'products');
+                $uploadResult = $cloudinaryService->uploadBase64Image($request->image_main, 'bs_shop/products');
+                if ($uploadResult['success']) {
+                    $imageUrl = $uploadResult['secure_url'];
+                }
             }
             // Vérifier si c'est un fichier uploadé (compatibilité FormData)
             elseif ($request->hasFile('image_main_file')) {
                 $image = $request->file('image_main_file');
-                $fileName = 'product_' . time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-                $imagePath = $image->storeAs('products', $fileName, 'public');
+                $uploadResult = $cloudinaryService->uploadImage($image, 'bs_shop/products');
+                if ($uploadResult['success']) {
+                    $imageUrl = $uploadResult['secure_url'];
+                }
             }
 
             // Créer le produit
@@ -370,7 +375,7 @@ class ProductController extends Controller
                 'description' => $request->description,
                 'base_price' => $request->base_price,
                 'category_id' => $request->category_id,
-                'image_main' => $imagePath,
+                'image_main' => $imageUrl,
                 'sort_order' => $request->sort_order ?? 0,
                 'is_active' => true
             ]);
@@ -398,7 +403,7 @@ class ProductController extends Controller
                 'slug' => $product->slug,
                 'description' => $product->description,
                 'base_price' => $product->base_price,
-                'image_main' => $product->image_main ? asset('storage/' . $product->image_main) : null,
+                'image_main' => $product->image_main,
                 'category' => [
                     'id' => $product->category->id,
                     'name' => $product->category->name,
@@ -584,7 +589,7 @@ class ProductController extends Controller
                 'slug' => $product->slug,
                 'description' => $product->description,
                 'base_price' => $product->base_price,
-                'image_main' => $product->image_main ? asset('storage/' . $product->image_main) : null,
+                'image_main' => $product->image_main,
                 'category' => [
                     'id' => $product->category->id,
                     'name' => $product->category->name,
@@ -728,16 +733,17 @@ class ProductController extends Controller
                 return false;
             }
 
-            // Sauvegarder l'image
-            $imagePath = $this->saveBase64Image($imageData['data'], 'products/images');
+            // Uploader l'image vers Cloudinary
+            $cloudinaryService = new CloudinaryService();
+            $uploadResult = $cloudinaryService->uploadBase64Image($imageData['data'], 'bs_shop/products/images');
             
-            if (!$imagePath) {
+            if (!$uploadResult['success']) {
                 return false;
             }
 
             // Créer l'enregistrement en base de données
             $product->images()->create([
-                'media_path' => $imagePath,
+                'media_path' => $uploadResult['secure_url'],
                 'media_type' => 'image',
                 'alt_text' => $imageData['alt_text'] ?? null,
                 'title' => $imageData['title'] ?? null,
@@ -749,4 +755,5 @@ class ProductController extends Controller
             return false;
         }
     }
+
 }

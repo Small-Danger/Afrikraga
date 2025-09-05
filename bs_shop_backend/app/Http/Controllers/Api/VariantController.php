@@ -192,7 +192,7 @@ class VariantController extends Controller
                     'slug' => $variant->product->slug,
                     'description' => $variant->product->description,
                     'base_price' => $variant->product->base_price,
-                    'image_main' => $variant->product->image_main ? asset('storage/' . $variant->product->image_main) : null,
+                    'image_main' => $variant->product->image_main,
                     'category' => [
                         'id' => $variant->product->category->id,
                         'name' => $variant->product->category->name,
@@ -337,11 +337,11 @@ class VariantController extends Controller
      * @param int $id - ID de la variante à modifier
      * @return JsonResponse - Variante mise à jour
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, int $productId, int $variantId): JsonResponse
     {
         try {
             // Récupérer la variante à modifier
-            $variant = ProductVariant::with(['product.category'])->find($id);
+            $variant = ProductVariant::with(['product.category'])->find($variantId);
 
             // Vérifier si la variante existe
             if (!$variant) {
@@ -349,6 +349,14 @@ class VariantController extends Controller
                     'success' => false,
                     'message' => 'Variante non trouvée'
                 ], 404);
+            }
+
+            // Vérifier que la variante appartient au bon produit
+            if ($variant->product_id != $productId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cette variante n\'appartient pas à ce produit'
+                ], 403);
             }
 
             // Vérifier si le produit parent est actif
@@ -467,11 +475,11 @@ class VariantController extends Controller
      * @param int $id - ID de la variante à supprimer
      * @return JsonResponse - Message de confirmation
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(int $productId, int $variantId): JsonResponse
     {
         try {
             // Récupérer la variante à supprimer
-            $variant = ProductVariant::with(['product'])->find($id);
+            $variant = ProductVariant::with(['product'])->find($variantId);
 
             // Vérifier si la variante existe
             if (!$variant) {
@@ -479,6 +487,14 @@ class VariantController extends Controller
                     'success' => false,
                     'message' => 'Variante non trouvée'
                 ], 404);
+            }
+
+            // Vérifier que la variante appartient au bon produit
+            if ($variant->product_id != $productId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cette variante n\'appartient pas à ce produit'
+                ], 403);
             }
 
             // Vérifier s'il y a des commandes associées à cette variante

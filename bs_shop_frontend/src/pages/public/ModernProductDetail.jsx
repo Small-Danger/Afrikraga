@@ -14,6 +14,7 @@ import {
 import { productService, categoryService, cartService } from '../../services/api';
 import { useCart } from '../../contexts/CartContext';
 import ProductSuggestions from '../../components/ProductSuggestions';
+import { ShimmerTextVariants } from '../../components/ShimmerText';
 
 const ModernProductDetail = () => {
   const { id } = useParams();
@@ -135,44 +136,8 @@ const ModernProductDetail = () => {
         }
       }, 10000); // 10 secondes max
       
-      // Vérifier le cache de session d'abord
-      const sessionCacheKey = `${SESSION_CACHE_KEY}_${id}`;
-      
-      try {
-        // Vérifier le cache du produit
-        const sessionCached = sessionStorage.getItem(sessionCacheKey);
-        if (sessionCached) {
-          const { data, timestamp } = JSON.parse(sessionCached);
-          if (Date.now() - timestamp < SESSION_CACHE_TTL) {
-            if (isMounted) {
-              setProduct(data);
-              setLoading(false);
-              clearTimeout(timeoutId);
-            }
-            
-            // Charger les catégories en arrière-plan
-            loadCategoriesInBackground();
-            return;
-          }
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la lecture du cache de session du produit:', error);
-      }
-      
-      // Vérifier le cache mémoire
-      const cacheKey = `product_${id}`;
-      const cached = productCacheRef.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) { // 5 minutes
-        if (isMounted) {
-          setProduct(cached.data);
-          setLoading(false);
-          clearTimeout(timeoutId);
-        }
-        
-        // Charger les catégories en arrière-plan
-        loadCategoriesInBackground();
-        return;
-      }
+      // Cache désactivé - chargement direct depuis l'API
+      console.log('🔄 Chargement direct du produit depuis l\'API (cache désactivé)');
 
       // Annuler la requête précédente
       if (abortControllerRef.current) {
@@ -213,22 +178,8 @@ const ModernProductDetail = () => {
             }
           }
           
-          // Mettre en cache de session
-          try {
-            const sessionData = {
-              data: productData,
-              timestamp: Date.now()
-            };
-            sessionStorage.setItem(sessionCacheKey, JSON.stringify(sessionData));
-          } catch (error) {
-            console.warn('Erreur lors de la sauvegarde du cache de session du produit:', error);
-          }
-          
-          // Mettre en cache mémoire
-          productCacheRef.current.set(cacheKey, {
-            data: productData,
-            timestamp: Date.now()
-          });
+          // Cache désactivé - pas de sauvegarde
+          console.log('💾 Cache désactivé - produit non sauvegardé');
           
           console.log('✅ Produit chargé avec succès');
         } else {
@@ -518,53 +469,7 @@ const ModernProductDetail = () => {
 
   // Affichage du chargement optimisé
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Contenu de chargement */}
-        <div className="px-3 sm:px-4 py-4">
-          {/* Image de chargement */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden mb-4 sm:mb-6">
-            <div className="h-80 sm:h-96 lg:h-[28rem] bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-pulse">
-                  <div className="w-8 h-8 bg-gray-300 rounded"></div>
-                </div>
-                <div className="h-4 bg-gray-300 rounded w-32 mx-auto animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Informations de chargement */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
-            {/* Titre */}
-            <div className="mb-4 sm:mb-6">
-              <div className="h-6 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse"></div>
-            </div>
-
-            {/* Prix */}
-            <div className="mb-4 sm:mb-6">
-              <div className="h-8 bg-gray-200 rounded w-32 animate-pulse"></div>
-            </div>
-
-            {/* Description */}
-            <div className="mb-4 sm:mb-6">
-              <div className="h-4 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
-              <div className="space-y-2">
-                <div className="h-4 bg-gray-200 rounded w-full animate-pulse"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6 animate-pulse"></div>
-                <div className="h-4 bg-gray-200 rounded w-4/6 animate-pulse"></div>
-              </div>
-            </div>
-
-            {/* Bouton */}
-            <div className="mb-4 sm:mb-6">
-              <div className="h-12 bg-gray-200 rounded-lg w-full animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <ShimmerTextVariants.PageLoader subtitle="Chargement du produit..." />;
   }
 
   // Fonction pour recharger les données
@@ -630,7 +535,7 @@ const ModernProductDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-20">
       {/* Notification de succès */}
       {showSuccess && <SuccessNotification />}
 
@@ -699,25 +604,29 @@ const ModernProductDetail = () => {
         </div>
       </div>
 
-      {/* Carousel d'images moderne - Optimisé mobile avec meilleure qualité */}
-      <div className="relative bg-white mb-4 sm:mb-6 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg">
-        <div className="relative h-80 sm:h-96 lg:h-[28rem] overflow-hidden">
+      {/* Container principal avec max-width */}
+      <div className="max-w-7xl mx-auto">
+        {/* Carousel d'images moderne - Optimisé mobile avec meilleure qualité */}
+        <div className="relative bg-white mb-4 sm:mb-6 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg">
+        <div className="relative h-80 sm:h-96 lg:h-[28rem] overflow-hidden bg-gray-50 flex items-center justify-center">
           {productImages.length > 0 ? (
-            <img
-              src={productImages[currentImageIndex]}
-              alt={`${safeGet(product, 'name', 'Produit')} - Image ${currentImageIndex + 1}`}
-              className="w-full h-full object-cover object-center transition-all duration-500 ease-in-out hover:scale-105 cursor-zoom-in"
-              style={{
-                imageRendering: 'high-quality',
-                WebkitImageRendering: 'high-quality',
-                filter: 'contrast(1.1) saturate(1.1)'
-              }}
-              loading="eager"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'flex';
-              }}
-            />
+            <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+              <img
+                src={productImages[currentImageIndex]}
+                alt={`${safeGet(product, 'name', 'Produit')} - Image ${currentImageIndex + 1}`}
+                className="w-full h-full object-cover object-center transition-all duration-500 ease-in-out hover:scale-105 cursor-zoom-in rounded-lg"
+                style={{
+                  imageRendering: 'high-quality',
+                  WebkitImageRendering: 'high-quality',
+                  filter: 'contrast(1.1) saturate(1.1)'
+                }}
+                loading="eager"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            </div>
           ) : null}
           
           {/* Image de fallback améliorée */}
@@ -971,10 +880,13 @@ const ModernProductDetail = () => {
           )}
         </div>
       </div>
+      </div>
 
-      {/* Section suggestions d'articles similaires */}
+      {/* Section suggestions d'articles similaires - Style Amazon/Shein moderne */}
       <div className="px-3 sm:px-4 pb-4 sm:pb-6">
-        <ProductSuggestions productId={id} cartSessionId={cartSessionId} />
+        <div className="max-w-7xl mx-auto">
+          <ProductSuggestions productId={id} cartSessionId={cartSessionId} />
+        </div>
       </div>
 
       {/* Styles CSS modernes - Utilisation de Tailwind CSS */}

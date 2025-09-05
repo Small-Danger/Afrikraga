@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Services\CloudinaryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -42,7 +43,7 @@ class CategoryController extends Controller
                     'name' => $category->name,
                     'slug' => $category->slug,
                     'description' => $category->description,
-                    'image_main' => $category->image_main ? asset('storage/' . $category->image_main) : null,
+                    'image_main' => $category->image_main && str_starts_with($category->image_main, 'http') ? $category->image_main : null,
                     'is_active' => $category->is_active, // Inclure le statut actif
                     'has_subcategories' => $category->children->count() > 0,
                     'subcategories_count' => $category->children->count(),
@@ -53,7 +54,7 @@ class CategoryController extends Controller
                             'name' => $subcategory->name,
                             'slug' => $subcategory->slug,
                             'description' => $subcategory->description,
-                            'image_main' => $subcategory->image_main ? asset('storage/' . $subcategory->image_main) : null,
+                            'image_main' => $subcategory->image_main,
                             'is_active' => $subcategory->is_active, // Inclure le statut actif
                             'products_count' => $subcategory->products()->count(),
                             'created_at' => $subcategory->created_at,
@@ -104,7 +105,8 @@ class CategoryController extends Controller
             // Cache pour les catégories (cache long car elles changent rarement)
             $cacheKey = 'categories_index_active';
             
-            $cachedResult = Cache::remember($cacheKey, 1800, function () {
+            // Cache désactivé temporairement
+            $cachedResult = function () {
                 // Récupérer toutes les catégories actives avec leurs relations
                 $categories = Category::with(['children' => function ($query) {
                         $query->where('is_active', true)
@@ -126,7 +128,7 @@ class CategoryController extends Controller
                     'name' => $category->name,
                     'slug' => $category->slug,
                     'description' => $category->description,
-                    'image_main' => $category->image_main ? asset('storage/' . $category->image_main) : null,
+                    'image_main' => $category->image_main && str_starts_with($category->image_main, 'http') ? $category->image_main : null,
                     'has_subcategories' => $category->children->count() > 0,
                     'subcategories_count' => $category->children->count(),
                     'products_count' => $category->products()->count(),
@@ -136,7 +138,7 @@ class CategoryController extends Controller
                             'name' => $subcategory->name,
                             'slug' => $subcategory->slug,
                             'description' => $subcategory->description,
-                            'image_main' => $subcategory->image_main ? asset('storage/' . $subcategory->image_main) : null,
+                            'image_main' => $subcategory->image_main,
                             'products_count' => $subcategory->products()->count(),
                             'created_at' => $subcategory->created_at,
                             'updated_at' => $subcategory->updated_at
@@ -155,9 +157,9 @@ class CategoryController extends Controller
                         'total' => $categories->count()
                     ]
                 ];
-            });
+            };
 
-            return response()->json($cachedResult, 200);
+            return response()->json($cachedResult(), 200);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -210,7 +212,7 @@ class CategoryController extends Controller
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'description' => $category->description,
-                'image_main' => $category->image_main ? asset('storage/' . $category->image_main) : null,
+                                    'image_main' => $category->image_main && str_starts_with($category->image_main, 'http') ? $category->image_main : null,
                 'is_active' => $category->is_active, // Inclure le statut actif
                 'is_main_category' => $category->isMain(),
                 'parent_category' => $category->parent ? [
@@ -224,7 +226,7 @@ class CategoryController extends Controller
                         'name' => $subcategory->name,
                         'slug' => $subcategory->slug,
                         'description' => $subcategory->description,
-                        'image_main' => $subcategory->image_main ? asset('storage/' . $subcategory->image_main) : null,
+                        'image_main' => $subcategory->image_main,
                         'products_count' => $subcategory->products()->count(),
                         'created_at' => $subcategory->created_at
                     ];
@@ -236,7 +238,7 @@ class CategoryController extends Controller
                         'slug' => $product->slug,
                         'description' => Str::limit($product->description, 100),
                         'base_price' => $product->base_price,
-                        'image_main' => $product->image_main ? asset('storage/' . $product->image_main) : null,
+                        'image_main' => $product->image_main,
                         'has_variants' => $product->hasVariants(),
                         'variants_count' => $product->variants->count(),
                         'min_price' => $product->variants->count() > 0 ? $product->variants->min('price') : $product->base_price,
@@ -321,12 +323,12 @@ class CategoryController extends Controller
             }
 
             // Traitement de l'image si fournie (base64)
-            $imagePath = null;
+            $imageUrl = null;
             if ($request->filled('image_main') && is_string($request->image_main)) {
                 try {
                     // Vérifier que c'est bien une image base64
                     if (strpos($request->image_main, 'data:image/') === 0) {
-                        // Extraire les données base64
+                        // Créer un fichier temporaire pour Cloudinary
                         $base64Data = $request->image_main;
                         $imageData = base64_decode(explode(',', $base64Data)[1]);
                         
@@ -337,11 +339,33 @@ class CategoryController extends Controller
                         // Générer un nom de fichier unique
                         $fileName = 'category_' . time() . '_' . Str::random(10) . '.' . $extension;
                         
-                        // Stocker l'image dans le dossier categories
-                        $imagePath = 'categories/' . $fileName;
-                        Storage::disk('public')->put($imagePath, $imageData);
+                        // Créer un fichier temporaire
+                        $tempFile = tmpfile();
+                        fwrite($tempFile, $imageData);
+                        $tempPath = stream_get_meta_data($tempFile)['uri'];
                         
-                        \Log::info('Image base64 traitée et sauvegardée:', ['path' => $imagePath, 'size' => strlen($imageData)]);
+                        // Créer un UploadedFile pour Cloudinary
+                        $uploadedFile = new \Illuminate\Http\UploadedFile(
+                            $tempPath,
+                            $fileName,
+                            $mimeType,
+                            null,
+                            true
+                        );
+                        
+                        // Upload vers Cloudinary
+                        $cloudinaryService = new CloudinaryService();
+                        $result = $cloudinaryService->uploadImage($uploadedFile, 'bs_shop/categories');
+                        
+                        if ($result['success']) {
+                            $imageUrl = $result['secure_url'];
+                            \Log::info('Image uploadée vers Cloudinary:', ['url' => $imageUrl]);
+                        } else {
+                            \Log::error('Erreur upload Cloudinary:', ['error' => $result['error']]);
+                        }
+                        
+                        // Fermer le fichier temporaire
+                        fclose($tempFile);
                     }
                 } catch (\Exception $e) {
                     \Log::error('Erreur lors du traitement de l\'image base64:', ['error' => $e->getMessage()]);
@@ -354,7 +378,7 @@ class CategoryController extends Controller
                 'name' => $request->name,
                 'slug' => $slug,
                 'description' => $request->description ?? null,
-                'image_main' => $imagePath,
+                'image_main' => $imageUrl,
                 'parent_id' => $request->parent_id,
                 'sort_order' => $request->sort_order ?? 0,
                 'is_active' => $request->is_active ?? true
@@ -369,7 +393,7 @@ class CategoryController extends Controller
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'description' => $category->description,
-                'image_main' => $category->image_main ? asset('storage/' . $category->image_main) : null,
+                                    'image_main' => $category->image_main && str_starts_with($category->image_main, 'http') ? $category->image_main : null,
                 'parent_category' => $category->parent ? [
                     'id' => $category->parent->id,
                     'name' => $category->parent->name,
@@ -537,7 +561,7 @@ class CategoryController extends Controller
                 'name' => $category->name,
                 'slug' => $category->slug,
                 'description' => $category->description,
-                'image_main' => $category->image_main ? asset('storage/' . $category->image_main) : null,
+                                    'image_main' => $category->image_main && str_starts_with($category->image_main, 'http') ? $category->image_main : null,
                 'parent_category' => $category->parent ? [
                     'id' => $category->parent->id,
                     'name' => $category->parent->name,
@@ -662,26 +686,29 @@ class CategoryController extends Controller
                 ], 422);
             }
 
-            // Supprimer l'ancienne image si elle existe
-            if ($category->image_main && Storage::disk('public')->exists($category->image_main)) {
-                Storage::disk('public')->delete($category->image_main);
+            // Uploader la nouvelle image vers Cloudinary
+            $cloudinaryService = new CloudinaryService();
+            $image = $request->file('image_main');
+            $uploadResult = $cloudinaryService->uploadImage($image, 'bs_shop/categories');
+
+            if (!$uploadResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erreur lors de l\'upload de l\'image',
+                    'error' => $uploadResult['error']
+                ], 500);
             }
 
-            // Traitement de la nouvelle image
-            $image = $request->file('image_main');
-            $fileName = 'category_' . time() . '_' . Str::random(10) . '.' . $image->getClientOriginalExtension();
-            $imagePath = $image->storeAs('categories', $fileName, 'public');
-
             // Mettre à jour la catégorie
-            $category->image_main = $imagePath;
+            $category->image_main = $uploadResult['secure_url'];
             $category->save();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Image uploadée avec succès',
                 'data' => [
-                    'image_url' => asset('storage/' . $imagePath),
-                    'image_path' => $imagePath
+                    'image_url' => $uploadResult['secure_url'],
+                    'image_path' => $uploadResult['public_id']
                 ]
             ], 200);
 
@@ -693,4 +720,5 @@ class CategoryController extends Controller
             ], 500);
         }
     }
+
 }

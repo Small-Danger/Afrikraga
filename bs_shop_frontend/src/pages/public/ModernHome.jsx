@@ -16,6 +16,7 @@ import { categoryService, productService } from '../../services/api';
 import ProductCard from '../../components/ProductCard';
 import SimpleBannerCarousel from '../../components/SimpleBannerCarousel';
 import useBanners from '../../hooks/useBanners';
+import { ShimmerTextVariants } from '../../components/ShimmerText';
 
 const ModernHome = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -38,13 +39,13 @@ const ModernHome = () => {
   // Hook pour récupérer les bannières
   const { banners, loading: bannersLoading, error: bannersError, refresh: refreshBanners } = useBanners();
   
-  // Cache pour éviter les requêtes redondantes
+  // Cache désactivé temporairement
   const dataCacheRef = useRef(new Map());
   const abortControllerRef = useRef(null);
   
-  // Cache persistant de session
+  // Cache persistant de session - DÉSACTIVÉ
   const SESSION_CACHE_KEY = 'bs_shop_home_cache';
-  const SESSION_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 heures
+  const SESSION_CACHE_TTL = 0; // Cache désactivé
   
   // Nettoyer le cache expiré au chargement
   useEffect(() => {
@@ -80,8 +81,8 @@ const ModernHome = () => {
     try {
       setApiStatus('testing');
               // Utiliser l'IP locale pour le test sur téléphone
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://192.168.11.180:8000/api';
-      const response = await fetch(`${apiUrl}/test`);
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://web-production-7228.up.railway.app/api';
+      const response = await fetch(`${apiUrl}/banners`);
       if (response.ok) {
         const data = await response.json();
         console.log('✅ API connectée:', data);
@@ -104,33 +105,8 @@ const ModernHome = () => {
     let isMounted = true;
 
     const loadData = async () => {
-      // Vérifier le cache de session d'abord
-      try {
-        const sessionCached = sessionStorage.getItem(SESSION_CACHE_KEY);
-        if (sessionCached) {
-          const { data, timestamp } = JSON.parse(sessionCached);
-          if (Date.now() - timestamp < SESSION_CACHE_TTL) {
-            setCategories(data.categories);
-            setAllProducts(data.products);
-            setPopularProducts(data.popularProducts);
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la lecture du cache de session:', error);
-      }
-
-      // Vérifier le cache mémoire
-      const cacheKey = 'home_data';
-      const cached = dataCacheRef.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < 3 * 60 * 1000) { // 3 minutes
-        setCategories(cached.data.categories);
-        setAllProducts(cached.data.products);
-        setPopularProducts(cached.data.popularProducts);
-        setLoading(false);
-        return;
-      }
+      // Cache désactivé - chargement direct depuis l'API
+      console.log('🔄 Chargement direct depuis l\'API (cache désactivé)');
 
       // Annuler la requête précédente
       if (abortControllerRef.current) {
@@ -146,7 +122,7 @@ const ModernHome = () => {
         const isConnected = await testApiConnection();
         if (!isConnected) {
           if (isMounted) {
-            setError('Impossible de se connecter à l\'API. Vérifiez que le backend est démarré sur http://192.168.11.180:8000');
+            setError('Impossible de se connecter à l\'API. Vérifiez que le backend est démarré.');
             setLoading(false);
           }
           return;
@@ -178,30 +154,8 @@ const ModernHome = () => {
             .slice(0, 8);
           setPopularProducts(popular);
           
-          // Mettre en cache de session
-          try {
-            const sessionData = {
-              data: {
-                categories: categoriesRes.success ? categoriesRes.data.categories || [] : [],
-                products,
-                popularProducts: popular
-              },
-              timestamp: Date.now()
-            };
-            sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(sessionData));
-          } catch (error) {
-            console.warn('Erreur lors de la sauvegarde du cache de session:', error);
-          }
-
-          // Mettre en cache mémoire
-          dataCacheRef.current.set(cacheKey, {
-            data: {
-              categories: categoriesRes.success ? categoriesRes.data.categories || [] : [],
-              products,
-              popularProducts: popular
-            },
-            timestamp: Date.now()
-          });
+          // Cache désactivé - pas de sauvegarde
+          console.log('💾 Cache désactivé - données non sauvegardées');
         } else {
           console.error('❌ Erreur produits:', productsRes);
           setError('Erreur lors du chargement des produits: ' + (productsRes.message || 'Erreur inconnue'));
@@ -349,17 +303,7 @@ const ModernHome = () => {
 
   // Affichage du chargement
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-12 h-12 border-3 border-gray-200 rounded-full animate-spin"></div>
-            <div className="absolute top-0 left-0 w-12 h-12 border-3 border-transparent border-t-blue-500 rounded-full animate-spin"></div>
-          </div>
-          <p className="text-gray-600 mt-4 text-sm">Chargement...</p>
-        </div>
-      </div>
-    );
+    return <ShimmerTextVariants.PageLoader subtitle="Chargement des produits..." />;
   }
 
   // Affichage de l'erreur
@@ -386,7 +330,7 @@ const ModernHome = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white pb-20">
 
       {/* Hero Section Moderne - Réorganisé */}
       <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -473,27 +417,51 @@ const ModernHome = () => {
                   className="w-1/2 flex-shrink-0 px-2 py-4"
                   style={{ transform: `translateX(-${currentCategorySlide * 100}%)` }}
                 >
-                  <Link to={`/catalog/${category.slug}`} className="group block">
-                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden transition-all duration-300 group-hover:shadow-xl group-hover:scale-105">
-                      <div className="relative h-32 overflow-hidden">
-                        <img
-                          src={category.image_main || 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=300&fit=crop'}
-                          alt={category.name}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
-                      </div>
-                      <div className="p-4">
-                        <h3 className="font-bold text-gray-900 mb-2">{category.name}</h3>
-                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">{category.description}</p>
-                        {category.subcategories && category.subcategories.length > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-blue-600 font-medium">
-                              {category.subcategories.length} sous-catégorie{category.subcategories.length > 1 ? 's' : ''}
-                            </span>
-                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                  <Link to={`/catalog/${category.slug}`} className="group block h-full">
+                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl overflow-hidden transition-all duration-300 group-hover:shadow-xl group-hover:scale-105 h-full flex flex-col">
+                      {/* Image de la catégorie - Hauteur fixe */}
+                      <div className="relative h-32 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {category.image_main ? (
+                          <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                            <img
+                              src={category.image_main}
+                              alt={category.name}
+                              className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-110 rounded-lg"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100">
+                            <div className="text-center">
+                              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg">
+                                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                              </div>
+                              <span className="text-blue-600 font-medium text-xs">Catégorie</span>
+                            </div>
                           </div>
                         )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+                      </div>
+                      
+                      {/* Contenu de la catégorie - Flex pour occuper l'espace restant */}
+                      <div className="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">{category.name}</h3>
+                          <p className="text-sm text-gray-600 line-clamp-2 mb-2">{category.description}</p>
+                        </div>
+                        
+                        {/* Footer avec sous-catégories */}
+                        <div className="mt-auto">
+                          {category.subcategories && category.subcategories.length > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-blue-600 font-medium">
+                                {category.subcategories.length} sous-catégorie{category.subcategories.length > 1 ? 's' : ''}
+                              </span>
+                              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </Link>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { categoryService, productService } from '../../services/api';
+import { ShimmerTextVariants } from '../../components/ShimmerText';
 
 const ModernCatalog = () => {
   const { categorySlug, subcategorySlug } = useParams();
@@ -10,15 +11,15 @@ const ModernCatalog = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Cache pour éviter les requêtes redondantes
+  // Cache désactivé temporairement
   const cacheRef = useRef(new Map());
   const abortControllerRef = useRef(null);
   
-  // Cache persistant de session
+  // Cache persistant de session - DÉSACTIVÉ
   const SESSION_CACHE_KEY_CATEGORIES = 'bs_shop_categories_cache';
   const SESSION_CACHE_KEY_PRODUCTS = 'bs_shop_products_cache';
-  const SESSION_CACHE_TTL_CATEGORIES = 2 * 60 * 60 * 1000; // 2 heures
-  const SESSION_CACHE_TTL_PRODUCTS = 60 * 60 * 1000; // 1 heure
+  const SESSION_CACHE_TTL_CATEGORIES = 0; // Cache désactivé
+  const SESSION_CACHE_TTL_PRODUCTS = 0; // Cache désactivé
 
   // Charger les catégories depuis l'API avec cache
   useEffect(() => {
@@ -200,18 +201,7 @@ const ModernCatalog = () => {
 
   // Affichage du chargement
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-spin"></div>
-            <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-blue-600 rounded-full animate-spin"></div>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-700 mt-6 mb-2">Chargement en cours...</h2>
-          <p className="text-gray-500">Veuillez patienter</p>
-        </div>
-      </div>
-    );
+    return <ShimmerTextVariants.PageLoader subtitle="Chargement du catalogue..." />;
   }
 
   // Affichage de l'erreur
@@ -238,7 +228,7 @@ const ModernCatalog = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
       <div className="max-w-7xl mx-auto px-4 py-6">
         
         {!categorySlug ? (
@@ -264,22 +254,24 @@ const ModernCatalog = () => {
                   >
                     <div className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 transform-gpu animate-fade-in-up">
                       {/* Image de la catégorie - Optimisée */}
-                      <div className="h-56 bg-gradient-to-br from-blue-50 to-indigo-100 relative overflow-hidden">
+                      <div className="h-56 bg-gray-50 relative overflow-hidden flex items-center justify-center">
                         {category.image_main ? (
-                          <img
-                            src={category.image_main}
-                            alt={category.name}
-                            className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700 ease-out"
-                            style={{
-                              imageRendering: 'high-quality',
-                              WebkitImageRendering: 'high-quality'
-                            }}
-                            loading="lazy"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextSibling.style.display = 'flex';
-                            }}
-                          />
+                          <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                            <img
+                              src={category.image_main}
+                              alt={category.name}
+                              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out rounded-lg"
+                              style={{
+                                imageRendering: 'high-quality',
+                                WebkitImageRendering: 'high-quality'
+                              }}
+                              loading="lazy"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          </div>
                         ) : null}
                         
                         {/* Fallback avec icône si pas d'image - Amélioré */}
@@ -307,7 +299,6 @@ const ModernCatalog = () => {
                         </div>
                       </div>
                       
-                      {/* Contenu de la catégorie */}
                       <div className="p-6">
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-300">
@@ -451,22 +442,24 @@ const ModernCatalog = () => {
               <div>
                 {/* Header de la catégorie avec image - Optimisé */}
                 <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden mb-8 animate-fade-in-up">
-                  <div className="h-64 bg-gradient-to-r from-blue-100 via-indigo-100 to-purple-100 relative overflow-hidden">
+                  <div className="h-64 bg-gray-50 relative overflow-hidden flex items-center justify-center">
                     {currentCategory.image_main ? (
-                      <img
-                        src={currentCategory.image_main}
-                        alt={currentCategory.name}
-                        className="w-full h-full object-cover object-center"
-                        style={{
-                          imageRendering: 'high-quality',
-                          WebkitImageRendering: 'high-quality'
-                        }}
-                        loading="eager"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
+                      <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                        <img
+                          src={currentCategory.image_main}
+                          alt={currentCategory.name}
+                          className="w-full h-full object-cover object-center rounded-lg"
+                          style={{
+                            imageRendering: 'high-quality',
+                            WebkitImageRendering: 'high-quality'
+                          }}
+                          loading="eager"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      </div>
                     ) : null}
                     
                     {/* Fallback amélioré */}
@@ -514,22 +507,24 @@ const ModernCatalog = () => {
                         >
                           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 transform-gpu animate-fade-in-up">
                             {/* Image de la sous-catégorie - Optimisée */}
-                            <div className="h-40 bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100 relative overflow-hidden">
+                            <div className="h-40 bg-gray-50 relative overflow-hidden flex items-center justify-center">
                               {subcategory.image_main ? (
-                                <img
-                                  src={subcategory.image_main}
-                                  alt={subcategory.name}
-                                  className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700 ease-out"
-                                  style={{
-                                    imageRendering: 'high-quality',
-                                    WebkitImageRendering: 'high-quality'
-                                  }}
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'flex';
-                                  }}
-                                />
+                                <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                                  <img
+                                    src={subcategory.image_main}
+                                    alt={subcategory.name}
+                                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out rounded-lg"
+                                    style={{
+                                      imageRendering: 'high-quality',
+                                      WebkitImageRendering: 'high-quality'
+                                    }}
+                                    loading="lazy"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                </div>
                               ) : null}
                               
                               {/* Fallback amélioré */}
@@ -609,26 +604,30 @@ const ModernCatalog = () => {
                           className="block group"
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
-                          <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 transform-gpu border border-gray-100 animate-fade-in-up">
-                            {/* Image du produit - Optimisée */}
-                            <div className="h-52 bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-                              <img
-                                src={product.image_main || 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop'}
-                                alt={product.name}
-                                className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-700 ease-out"
-                                style={{
-                                  imageRendering: 'high-quality',
-                                  WebkitImageRendering: 'high-quality'
-                                }}
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.nextSibling.style.display = 'flex';
-                                }}
-                              />
+                          <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 transform-gpu border border-gray-100 animate-fade-in-up h-96 flex flex-col">
+                            {/* Image du produit - Hauteur fixe et optimisée */}
+                            <div className="h-64 bg-gray-50 relative overflow-hidden flex items-center justify-center flex-shrink-0">
+                              {product.image_main ? (
+                                <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                                  <img
+                                    src={product.image_main}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out rounded-lg"
+                                    style={{
+                                      imageRendering: 'high-quality',
+                                      WebkitImageRendering: 'high-quality'
+                                    }}
+                                    loading="lazy"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                </div>
+                              ) : null}
                               
                               {/* Image de fallback pour les produits */}
-                              <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 items-center justify-center hidden">
+                              <div className={`w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${product.image_main ? 'hidden' : 'flex'}`}>
                                 <div className="text-center">
                                   <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg">
                                     <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -641,7 +640,7 @@ const ModernCatalog = () => {
                               
                               {/* Badge de prix flottant - Toujours visible */}
                               <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg">
-                                <span className="text-sm sm:text-base font-bold text-blue-600">
+                                <span className="text-sm font-bold text-blue-600">
                                   {Math.round(Number(product.base_price || 0))} FCFA
                                 </span>
                               </div>
@@ -650,21 +649,29 @@ const ModernCatalog = () => {
                               <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                             </div>
                             
-                            {/* Contenu du produit - Avec prix */}
-                            <div className="p-5">
-                              <h3 className="font-bold text-gray-900 text-lg mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-300 leading-tight">
-                                {product.name}
-                              </h3>
+                            {/* Contenu du produit - Structure fixe pour éviter les coupures */}
+                            <div className="p-4 flex-1 flex flex-col">
+                              {/* Titre - Hauteur fixe */}
+                              <div className="mb-3 h-12 flex items-start">
+                                <h3 className="font-bold text-gray-900 text-base line-clamp-2 group-hover:text-blue-600 transition-colors duration-300 leading-tight">
+                                  {product.name}
+                                </h3>
+                              </div>
                               
-                              {product.description && (
-                                <p className="text-sm text-gray-600 mb-4 line-clamp-2 leading-relaxed">{product.description}</p>
-                              )}
+                              {/* Description - Hauteur fixe */}
+                              <div className="mb-4 h-10 flex items-start">
+                                {product.description ? (
+                                  <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
+                                ) : (
+                                  <div className="h-full"></div>
+                                )}
+                              </div>
                               
-                              {/* Prix principal */}
-                              <div className="mb-4">
-                                <div className="flex items-center justify-between">
+                              {/* Prix - Toujours visible en bas */}
+                              <div className="mt-auto">
+                                <div className="flex items-center justify-between mb-3">
                                   <div>
-                                    <span className="text-2xl font-bold text-blue-600">
+                                    <span className="text-xl font-bold text-blue-600">
                                       {Math.round(Number(product.base_price || 0))} FCFA
                                     </span>
                                   </div>
@@ -674,11 +681,12 @@ const ModernCatalog = () => {
                                     </svg>
                                   </div>
                                 </div>
-                              </div>
-                              
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Voir détails</span>
-                                <span className="text-xs text-gray-400">Cliquez pour voir</span>
+                                
+                                {/* Footer avec CTA */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Voir détails</span>
+                                  <span className="text-xs text-gray-400">Cliquez pour voir</span>
+                                </div>
                               </div>
                             </div>
                           </div>

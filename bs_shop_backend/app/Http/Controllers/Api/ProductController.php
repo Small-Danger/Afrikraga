@@ -56,6 +56,15 @@ class ProductController extends Controller
                 });
             }
 
+            // Filtre par statut (actif/inactif)
+            if ($request->has('status') && $request->status) {
+                if ($request->status === 'active') {
+                    $query->where('is_active', true);
+                } elseif ($request->status === 'inactive') {
+                    $query->where('is_active', false);
+                }
+            }
+
             // Filtre par prix minimum
             if ($request->has('min_price') && $request->min_price) {
                 $query->where(function ($q) use ($request) {
@@ -153,6 +162,142 @@ class ProductController extends Controller
     }
 
     /**
+     * Liste des produits pour l'admin (tous les produits, actifs et inactifs)
+     * 
+     * @param Request $request - Requête avec filtres optionnels
+     * @return JsonResponse - Liste des produits filtrés et paginés
+     */
+    public function adminIndex(Request $request): JsonResponse
+    {
+        try {
+            // Construire la requête de base - SANS filtre is_active pour l'admin
+            $query = Product::with(['category' => function ($categoryQuery) {
+                    $categoryQuery->with('parent'); // Charger aussi la catégorie parente
+                }, 'variants' => function ($variantQuery) {
+                    $variantQuery->where('is_active', true);
+                }]);
+
+            // Filtre par catégorie principale
+            if ($request->has('category_id') && $request->category_id) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            // Filtre par sous-catégorie (catégories enfants)
+            if ($request->has('subcategory_id') && $request->subcategory_id) {
+                $query->where('category_id', $request->subcategory_id);
+            }
+
+            // Filtre par mot-clé (recherche dans le nom et la description)
+            if ($request->has('search') && $request->search) {
+                $searchTerm = $request->search;
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('name', 'LIKE', "%{$searchTerm}%")
+                      ->orWhere('description', 'LIKE', "%{$searchTerm}%");
+                });
+            }
+
+            // Filtre par statut (actif/inactif) - pour l'admin, on peut filtrer
+            if ($request->has('status') && $request->status) {
+                if ($request->status === 'active') {
+                    $query->where('is_active', true);
+                } elseif ($request->status === 'inactive') {
+                    $query->where('is_active', false);
+                }
+            }
+
+            // Filtre par prix minimum
+            if ($request->has('min_price') && $request->min_price) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('base_price', '>=', $request->min_price)
+                      ->orWhereHas('variants', function ($variantQ) use ($request) {
+                          $variantQ->where('price', '>=', $request->min_price);
+                      });
+                });
+            }
+
+            // Filtre par prix maximum
+            if ($request->has('max_price') && $request->max_price) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('base_price', '<=', $request->max_price)
+                      ->orWhereHas('variants', function ($variantQ) use ($request) {
+                          $variantQ->where('price', '<=', $request->max_price);
+                      });
+                });
+            }
+
+            // Tri des produits
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortOrder = $request->get('sort_order', 'desc');
+            
+            if ($sortBy === 'price') {
+                $query->orderBy('base_price', $sortOrder);
+            } elseif ($sortBy === 'name') {
+                $query->orderBy('name', $sortOrder);
+            } elseif ($sortBy === 'created_at') {
+                $query->orderBy('created_at', $sortOrder);
+            } else {
+                $query->orderBy('created_at', 'desc');
+            }
+
+            // Pagination - plus de produits par page pour l'admin
+            $perPage = $request->get('per_page', 50);
+            $products = $query->paginate($perPage);
+
+            // Formater les données des produits pour l'admin
+            $formattedProducts = $products->getCollection()->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'slug' => $product->slug,
+                    'description' => $product->description,
+                    'base_price' => $product->base_price,
+                    'image_main' => $product->image_main,
+                    'is_active' => $product->is_active,
+                    'category' => [
+                        'id' => $product->category->id,
+                        'name' => $product->category->name,
+                        'slug' => $product->category->slug,
+                        'is_main' => $product->category->isMain(),
+                        'is_subcategory' => $product->category->isSubcategory(),
+                        'parent' => $product->category->parent ? [
+                            'id' => $product->category->parent->id,
+                            'name' => $product->category->parent->name,
+                            'slug' => $product->category->parent->slug
+                        ] : null
+                    ],
+                    'has_variants' => $product->hasVariants(),
+                    'variants_count' => $product->variants->count(),
+                    'min_price' => $product->variants->count() > 0 ? $product->variants->min('price') : $product->base_price,
+                    'max_price' => $product->variants->count() > 0 ? $product->variants->max('price') : $product->base_price,
+                    'sort_order' => $product->sort_order,
+                    'created_at' => $product->created_at,
+                    'updated_at' => $product->updated_at
+                ];
+            });
+
+            // Retourner la réponse avec pagination Laravel standard
+            return response()->json([
+                'success' => true,
+                'message' => 'Produits récupérés avec succès',
+                'data' => $formattedProducts,
+                'current_page' => $products->currentPage(),
+                'last_page' => $products->lastPage(),
+                'per_page' => $products->perPage(),
+                'total' => $products->total(),
+                'from' => $products->firstItem(),
+                'to' => $products->lastItem()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des produits',
+                'error' => 'Une erreur est survenue'
+            ], 500);
+        }
+    }
+
+    /**
      * Afficher un produit spécifique avec ses variantes et images
      * 
      * @param int $id - ID du produit
@@ -225,6 +370,7 @@ class ProductController extends Controller
                         'sku' => $variant->sku,
                         'price' => $variant->price,
                         'stock_quantity' => $variant->stock_quantity,
+                        'is_active' => $variant->is_active,
                         'is_available' => $variant->isAvailable(),
                         'sort_order' => $variant->sort_order
                     ];
@@ -753,6 +899,204 @@ class ProductController extends Controller
             return true;
         } catch (\Exception $e) {
             return false;
+        }
+    }
+
+    /**
+     * Créer plusieurs produits en masse (ADMIN ONLY)
+     * 
+     * @param Request $request - Données des produits avec catégorie commune
+     * @return JsonResponse - Produits créés
+     */
+    public function storeBatch(Request $request): JsonResponse
+    {
+        try {
+            // Augmenter les limites pour les gros volumes
+            ini_set('memory_limit', '512M');
+            ini_set('max_execution_time', 300);
+            // Validation des données de création en masse
+            $validator = Validator::make($request->all(), [
+                'category_id' => 'required|exists:categories,id',
+                'products' => 'required|array|min:1|max:100', // Limite de 100 produits par batch
+                'products.*.name' => 'required|string|max:255',
+                'products.*.description' => 'required|string',
+                'products.*.base_price' => 'required|numeric|min:0',
+                'products.*.image_main' => 'required|string', // Image base64 obligatoire
+                'products.*.is_active' => 'nullable|boolean',
+                'products.*.sort_order' => 'nullable|integer|min:0',
+                // Validation des variantes (optionnelles)
+                'products.*.variants' => 'nullable|array',
+                'products.*.variants.*.name' => 'required_with:products.*.variants|string|max:255',
+                'products.*.variants.*.price' => 'required_with:products.*.variants|numeric|min:0',
+                'products.*.variants.*.sku' => 'nullable|string|max:100',
+                'products.*.variants.*.stock_quantity' => 'nullable|integer|min:0',
+                'products.*.variants.*.is_active' => 'nullable|boolean',
+                'products.*.variants.*.sort_order' => 'nullable|integer|min:0'
+            ], [
+                'category_id.required' => 'La catégorie est obligatoire',
+                'category_id.exists' => 'La catégorie sélectionnée n\'existe pas',
+                'products.required' => 'Au moins un produit est requis',
+                'products.array' => 'Les produits doivent être un tableau',
+                'products.min' => 'Au moins un produit est requis',
+                'products.max' => 'Maximum 50 produits par création en masse',
+                'products.*.name.required' => 'Le nom du produit est obligatoire',
+                'products.*.name.max' => 'Le nom ne peut pas dépasser 255 caractères',
+                'products.*.description.required' => 'La description du produit est obligatoire',
+                'products.*.base_price.required' => 'Le prix de base est obligatoire',
+                'products.*.base_price.numeric' => 'Le prix de base doit être un nombre',
+                'products.*.base_price.min' => 'Le prix de base ne peut pas être négatif',
+                'products.*.image_main.required' => 'L\'image principale est obligatoire',
+                'products.*.is_active.boolean' => 'Le statut actif doit être vrai ou faux',
+                'products.*.sort_order.integer' => 'L\'ordre doit être un nombre entier',
+                'products.*.sort_order.min' => 'L\'ordre ne peut pas être négatif'
+            ]);
+
+            // Si validation échoue, retourner les erreurs
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erreur de validation',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Vérifier que la catégorie existe et est active
+            $category = Category::find($request->category_id);
+            if (!$category || !$category->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La catégorie sélectionnée n\'est pas disponible'
+                ], 422);
+            }
+
+            // Démarrer une transaction pour garantir l'intégrité
+            \DB::beginTransaction();
+
+            try {
+                $createdProducts = [];
+                $cloudinaryService = new CloudinaryService();
+                $sortOrder = 0;
+                
+                // Optimisation pour gros volumes : traiter par petits lots
+                $batchSize = 10;
+                $products = array_chunk($request->products, $batchSize);
+
+                foreach ($products as $productBatch) {
+                    foreach ($productBatch as $productData) {
+                    // Générer le slug unique à partir du nom
+                    $slug = Str::slug($productData['name']);
+                    $originalSlug = $slug;
+                    $counter = 1;
+
+                    // Vérifier l'unicité du slug
+                    while (Product::where('slug', $slug)->exists()) {
+                        $slug = $originalSlug . '-' . $counter;
+                        $counter++;
+                    }
+
+                    // Uploader l'image vers Cloudinary
+                    $imageUrl = null;
+                    if (isset($productData['image_main']) && $productData['image_main']) {
+                        $uploadResult = $cloudinaryService->uploadBase64Image($productData['image_main'], 'bs_shop/products');
+                        if ($uploadResult['success']) {
+                            $imageUrl = $uploadResult['secure_url'];
+                        } else {
+                            throw new \Exception('Erreur lors de l\'upload de l\'image pour le produit: ' . $productData['name']);
+                        }
+                    }
+
+                    // Créer le produit
+                    $product = Product::create([
+                        'name' => $productData['name'],
+                        'slug' => $slug,
+                        'description' => $productData['description'],
+                        'base_price' => $productData['base_price'],
+                        'category_id' => $request->category_id,
+                        'image_main' => $imageUrl,
+                        'sort_order' => $productData['sort_order'] ?? $sortOrder,
+                        'is_active' => $productData['is_active'] ?? true
+                    ]);
+
+                    // Créer les variantes si elles existent
+                    $createdVariants = [];
+                    \Log::info('Données du produit reçues:', ['product' => $productData]);
+                    if (isset($productData['variants']) && is_array($productData['variants']) && count($productData['variants']) > 0) {
+                        \Log::info('Variantes trouvées pour le produit:', ['variants' => $productData['variants']]);
+                        foreach ($productData['variants'] as $variantData) {
+                            $variant = $product->variants()->create([
+                                'name' => $variantData['name'],
+                                'price' => $variantData['price'],
+                                'sku' => $variantData['sku'] ?? null,
+                                'stock_quantity' => $variantData['stock_quantity'] ?? 0,
+                                'is_active' => $variantData['is_active'] ?? true,
+                                'sort_order' => $variantData['sort_order'] ?? 0
+                            ]);
+                            
+                            $createdVariants[] = [
+                                'id' => $variant->id,
+                                'name' => $variant->name,
+                                'price' => $variant->price,
+                                'sku' => $variant->sku,
+                                'stock_quantity' => $variant->stock_quantity,
+                                'is_active' => $variant->is_active,
+                                'sort_order' => $variant->sort_order
+                            ];
+                        }
+                    }
+
+                    $productResponse = [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'slug' => $product->slug,
+                        'description' => $product->description,
+                        'base_price' => $product->base_price,
+                        'image_main' => $product->image_main,
+                        'category_id' => $product->category_id,
+                        'sort_order' => $product->sort_order,
+                        'is_active' => $product->is_active,
+                        'created_at' => $product->created_at,
+                        'variants' => $createdVariants
+                    ];
+                    
+                    \Log::info('Produit créé avec variantes:', ['product' => $productResponse]);
+                    $createdProducts[] = $productResponse;
+
+                        $sortOrder++;
+                    }
+                }
+
+                // Valider la transaction
+                \DB::commit();
+
+                // Invalider le cache des produits
+                Cache::forget('products_index_' . md5(serialize([])));
+
+                return response()->json([
+                    'success' => true,
+                    'message' => count($createdProducts) . ' produit(s) créé(s) avec succès',
+                    'data' => [
+                        'products' => $createdProducts,
+                        'count' => count($createdProducts),
+                        'category' => [
+                            'id' => $category->id,
+                            'name' => $category->name,
+                            'slug' => $category->slug
+                        ]
+                    ]
+                ], 201);
+
+            } catch (\Exception $e) {
+                // Annuler la transaction en cas d'erreur
+                \DB::rollback();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la création en masse des produits',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 

@@ -10,13 +10,16 @@ import {
   Play,
   Pause,
   ShoppingCart,
-  Heart
+  Heart,
+  MessageCircle,
+  Phone
 } from 'lucide-react';
 import { categoryService, productService } from '../../services/api';
 import ProductCard from '../../components/ProductCard';
 import SimpleBannerCarousel from '../../components/SimpleBannerCarousel';
 import useBanners from '../../hooks/useBanners';
 import { ShimmerTextVariants } from '../../components/ShimmerText';
+import { generateWhatsAppLink, CONTACT_CONFIG } from '../../config/contact';
 
 const ModernHome = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -81,7 +84,7 @@ const ModernHome = () => {
     try {
       setApiStatus('testing');
               // Utiliser l'IP locale pour le test sur téléphone
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://web-production-7228.up.railway.app/api';
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://api.afrikraga.com/api';
       const response = await fetch(`${apiUrl}/banners`);
       if (response.ok) {
         const data = await response.json();
@@ -131,7 +134,7 @@ const ModernHome = () => {
         // Charger les catégories et produits en parallèle
         const [categoriesRes, productsRes] = await Promise.all([
           categoryService.getCategories(),
-          productService.getProducts({ per_page: 50, sort_by: 'created_at', sort_order: 'desc' })
+          productService.getProducts({ per_page: 5, sort_by: 'created_at', sort_order: 'desc' })
         ]);
         
         if (!isMounted) return;
@@ -146,13 +149,13 @@ const ModernHome = () => {
         
         if (productsRes.success) {
           const products = productsRes.data.products || [];
-          setAllProducts(products);
           
-          // Filtrer les produits populaires (ceux avec un rating élevé)
-          const popular = products
-            .filter(product => (product.rating || 0) >= 4.0)
-            .slice(0, 8);
-          setPopularProducts(popular);
+          // Mélanger les produits pour avoir des résultats aléatoires à chaque chargement
+          const shuffledProducts = [...products].sort(() => Math.random() - 0.5);
+          
+          // Utiliser les 5 produits aléatoires pour toutes les sections
+          setAllProducts(shuffledProducts);
+          setPopularProducts(shuffledProducts);
           
           // Cache désactivé - pas de sauvegarde
           console.log('💾 Cache désactivé - données non sauvegardées');
@@ -227,7 +230,7 @@ const ModernHome = () => {
     }
     
     productAutoPlayRef.current = setInterval(() => {
-      setCurrentProductSlide((prev) => (prev + 1) % Math.ceil(allProducts.length / 2));
+      setCurrentProductSlide((prev) => (prev + 1) % Math.ceil(allProducts.length / 3));
     }, 2500);
     
     return () => {
@@ -300,6 +303,17 @@ const ModernHome = () => {
       console.error('Erreur lors du rafraîchissement:', error);
     }
   }, [refreshBanners]);
+
+  // Fonctions de contact
+  const handleWhatsAppContact = useCallback(() => {
+    const message = "Bonjour ! J'aimerais avoir des informations sur vos produits. Pouvez-vous m'aider ?";
+    const whatsappUrl = generateWhatsAppLink(message);
+    window.open(whatsappUrl, '_blank');
+  }, []);
+
+  const handlePhoneCall = useCallback(() => {
+    window.open(`tel:${CONTACT_CONFIG.WHATSAPP_PHONE}`, '_self');
+  }, []);
 
   // Affichage du chargement
   if (loading) {
@@ -425,7 +439,7 @@ const ModernHome = () => {
                           <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
                             <img
                               src={category.image_main}
-                              alt={category.name}
+                          alt={category.name}
                               className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-110 rounded-lg"
                             />
                           </div>
@@ -448,19 +462,19 @@ const ModernHome = () => {
                       <div className="p-4 flex-1 flex flex-col justify-between">
                         <div>
                           <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">{category.name}</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-2">{category.description}</p>
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">{category.description}</p>
                         </div>
                         
                         {/* Footer avec sous-catégories */}
                         <div className="mt-auto">
-                          {category.subcategories && category.subcategories.length > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-blue-600 font-medium">
-                                {category.subcategories.length} sous-catégorie{category.subcategories.length > 1 ? 's' : ''}
-                              </span>
-                              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                            </div>
-                          )}
+                        {category.subcategories && category.subcategories.length > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-blue-600 font-medium">
+                              {category.subcategories.length} sous-catégorie{category.subcategories.length > 1 ? 's' : ''}
+                            </span>
+                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                          </div>
+                        )}
                         </div>
                       </div>
                     </div>
@@ -591,7 +605,7 @@ const ModernHome = () => {
         </div>
       )}
 
-      {/* Section CTA */}
+      {/* Section CTA - Besoin d'aide */}
       <div className="px-4 py-6">
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 text-center text-white">
           <h3 className="text-lg font-bold mb-2">Besoin d'aide ?</h3>
@@ -599,11 +613,19 @@ const ModernHome = () => {
             Notre équipe est là pour vous conseiller
           </p>
           <div className="flex space-x-3">
-            <button className="flex-1 bg-white text-blue-600 px-4 py-2 rounded-xl font-medium text-sm hover:bg-gray-100 transition-colors">
-              💬 Contacter
+            <button 
+              onClick={handleWhatsAppContact}
+              className="flex-1 bg-white text-blue-600 px-4 py-2 rounded-xl font-medium text-sm hover:bg-gray-100 transition-colors flex items-center justify-center space-x-2"
+            >
+              <MessageCircle size={16} />
+              <span>WhatsApp</span>
             </button>
-            <button className="flex-1 bg-transparent border border-white text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors">
-              📞 Appeler
+            <button 
+              onClick={handlePhoneCall}
+              className="flex-1 bg-transparent border border-white text-white px-4 py-2 rounded-xl font-medium text-sm hover:bg-white/10 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Phone size={16} />
+              <span>Appeler</span>
             </button>
           </div>
         </div>

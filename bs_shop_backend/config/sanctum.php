@@ -15,12 +15,9 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
-        Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
-    ))),
+    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', 
+        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1,afrikraga.com,www.afrikraga.com,api.afrikraga.com'
+    )),
 
     /*
     |--------------------------------------------------------------------------
@@ -48,6 +45,24 @@ return [
     */
 
     'expiration' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cookie Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configure the cookie settings for Sanctum to work with cross-domain
+    | requests between your frontend and backend.
+    |
+    */
+
+    'cookie' => [
+        'name' => env('SANCTUM_COOKIE_NAME', 'afrikraga_session'),
+        'domain' => env('SANCTUM_COOKIE_DOMAIN', '.afrikraga.com'),
+        'secure' => env('SANCTUM_COOKIE_SECURE', true),
+        'http_only' => env('SANCTUM_COOKIE_HTTP_ONLY', true),
+        'same_site' => env('SANCTUM_COOKIE_SAME_SITE', 'none'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

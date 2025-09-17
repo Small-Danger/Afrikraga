@@ -22,6 +22,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import NotificationContainer from '../../components/ui/NotificationContainer';
 import { useNotification } from '../../hooks/useNotification';
 import ProductForm from '../../components/forms/ProductForm';
+import BatchProductForm from '../../components/forms/BatchProductForm';
 import ImageManager from '../../components/admin/ImageManager';
 import VariantManager from '../../components/admin/VariantManager';
 import { productService, categoryService } from '../../services/api';
@@ -32,6 +33,7 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showImagesModal, setShowImagesModal] = useState(false);
   const [showVariantsModal, setShowVariantsModal] = useState(false);
@@ -71,7 +73,8 @@ const Products = () => {
         search: searchTerm || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         category_id: categoryFilter !== 'all' ? categoryFilter : undefined,
-        sort: sortBy ? `${sortBy}-${sortOrder}` : undefined
+        sort_by: sortBy || undefined,
+        sort_order: sortOrder || undefined
       };
       
       // Nettoyer les paramètres undefined
@@ -80,26 +83,27 @@ const Products = () => {
       );
       
       console.log('📦 Paramètres produits:', productsParams);
-      const productsResponse = await productService.getProducts(productsParams);
+      const productsResponse = await productService.getProductsAdmin(productsParams);
       console.log('📦 Réponse API produits:', productsResponse);
       
       if (productsResponse.success) {
-        const productsData = productsResponse.data?.products?.data || productsResponse.data?.products || productsResponse.data || [];
+        console.log('📦 Réponse API complète:', productsResponse);
+        
+        // Structure de réponse admin (data directe)
+        const productsData = productsResponse.data || [];
         console.log('📦 Produits extraits:', productsData);
         
         setProducts(Array.isArray(productsData) ? productsData : []);
         
-        // Gestion de la pagination
-        if (productsResponse.data?.pagination) {
-          setPagination(productsResponse.data.pagination);
-        } else if (productsResponse.data?.meta) {
-          setPagination(prev => ({
-            ...prev,
-            total: productsResponse.data.meta.total || productsData.length,
-            last_page: productsResponse.data.meta.last_page || 1,
-            current_page: productsResponse.data.meta.current_page || 1
-          }));
-        }
+        // Gestion de la pagination (structure admin)
+        setPagination({
+          current_page: productsResponse.current_page || 1,
+          per_page: productsResponse.per_page || 10,
+          total: productsResponse.total || 0,
+          last_page: productsResponse.last_page || 1,
+          from: productsResponse.from || 1,
+          to: productsResponse.to || productsData.length
+        });
       } else {
         console.error('❌ Erreur API produits:', productsResponse.message);
         addNotification('error', productsResponse.message || 'Erreur lors du chargement des produits');
@@ -164,6 +168,39 @@ const Products = () => {
     } catch (error) {
       console.error('Erreur lors de la sauvegarde du produit:', error);
       addNotification('error', 'Erreur lors de la sauvegarde du produit');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBatchSubmit = async (batchData) => {
+    try {
+      setActionLoading(true);
+      setFormErrors({});
+      
+      console.log('💾 Sauvegarde en masse:', batchData);
+      
+      const response = await productService.createProductsBatch(batchData);
+      
+      console.log('✅ Réponse sauvegarde en masse:', response);
+      
+      if (response.success) {
+        addNotification(
+          'success', 
+          `${response.data.count} produit(s) créé(s) avec succès`
+        );
+        setShowBatchModal(false);
+        await fetchData(true); // Force refresh
+      } else {
+        if (response.errors) {
+          setFormErrors(response.errors);
+        } else {
+          addNotification('error', response.message || 'Une erreur est survenue');
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde en masse:', error);
+      addNotification('error', 'Erreur lors de la création en masse des produits');
     } finally {
       setActionLoading(false);
     }
@@ -383,6 +420,15 @@ const Products = () => {
             >
               <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Actualiser
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => setShowBatchModal(true)}
+              className="shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              <PlusIcon className="w-5 h-5 mr-2" />
+              <span className="hidden sm:inline">Créer plusieurs produits</span>
+              <span className="sm:hidden">En masse</span>
             </Button>
             <Button 
               onClick={() => setShowProductModal(true)}
@@ -946,6 +992,16 @@ const Products = () => {
           onClose={() => handleModalClose('product')}
           onSubmit={handleProductSubmit}
           product={editingProduct}
+          categories={categories}
+          loading={actionLoading}
+          errors={formErrors}
+        />
+
+        {/* Formulaire de création en masse */}
+        <BatchProductForm
+          isOpen={showBatchModal}
+          onClose={() => setShowBatchModal(false)}
+          onSubmit={handleBatchSubmit}
           categories={categories}
           loading={actionLoading}
           errors={formErrors}

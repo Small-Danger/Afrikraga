@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PhotoIcon, VideoCameraIcon, TrashIcon, CameraIcon } from '@heroicons/react/24/outline';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
@@ -6,6 +6,7 @@ import { imageService, productService } from '../../services/api';
 import { API_CONFIG } from '../../config/api';
 
 const ImageManager = ({ product, onClose, onUpdate }) => {
+  const mountedRef = useRef(true);
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,6 +17,10 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
     if (product) {
       loadProductMedia();
     }
+    
+    return () => {
+      mountedRef.current = false;
+    };
   }, [product]);
 
   const loadProductMedia = async () => {
@@ -36,13 +41,17 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
         console.log('🖼️ Images finales:', imagesData);
         console.log('🎥 Vidéos finales:', videosData);
         
-        setImages(imagesData);
-        setVideos(videosData);
+        if (mountedRef.current) {
+          setImages(imagesData);
+          setVideos(videosData);
+        }
       }
     } catch (error) {
       console.error('❌ Erreur lors du chargement des médias:', error);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -54,15 +63,21 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
     try {
       const formData = new FormData();
       
-      // Ajouter chaque fichier au FormData
+      // Ajouter chaque fichier au FormData avec les bons noms de champs
       Array.from(files).forEach((file, index) => {
-        formData.append(`images[${index}]`, file);
-        formData.append(`alt_text[${index}]`, file.name);
-        formData.append(`title[${index}]`, file.name);
-        formData.append(`sort_order[${index}]`, (images.length + index).toString());
+        formData.append(`media_files[]`, file);
+        formData.append(`alt_texts[]`, file.name);
+        formData.append(`titles[]`, file.name);
+        formData.append(`sort_orders[]`, (images.length + index).toString());
       });
       
       console.log('📤 Upload des images:', files.length, 'fichiers');
+      
+      // Debug FormData
+      console.log('📤 FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`  ${key}:`, value);
+      }
       
       const response = await imageService.createImages(product.id, formData);
       console.log('📡 Réponse upload:', response);
@@ -108,50 +123,34 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
     setDragOver(false);
   };
 
-  // Fonction utilitaire pour obtenir l'URL de l'image
-  const getImageUrl = (image) => {
-    console.log('=== DEBUG getImageUrl ===');
-    console.log('Image reçue:', image);
-    console.log('Clés disponibles:', Object.keys(image));
+  // Fonction utilitaire pour obtenir l'URL de l'image/vidéo
+  const getMediaUrl = (media) => {
+    console.log('=== DEBUG getMediaUrl ===');
+    console.log('Média reçu:', media);
     
-    // Priorité 1: media_path (URL complète de l'API)
-    if (image.media_path && image.media_path.startsWith('http')) {
-      console.log('✅ Utilisation media_path (URL complète):', image.media_path);
-      return image.media_path;
+    // Priorité 1: media_path (URL complète du backend)
+    if (media.media_path) {
+      console.log('✅ Utilisation media_path:', media.media_path);
+      return media.media_path;
     }
     
-    // Priorité 2: data (base64 pour les nouvelles images)
-    if (image.data && image.data.startsWith('data:')) {
-      console.log('✅ Utilisation data (base64):', image.data.substring(0, 50) + '...');
-      return image.data;
+    // Priorité 2: data (base64 pour les nouveaux médias)
+    if (media.data && media.data.startsWith('data:')) {
+      console.log('✅ Utilisation data (base64):', media.data.substring(0, 50) + '...');
+      return media.data;
     }
     
     // Priorité 3: autres propriétés possibles
-    if (image.url) {
-      console.log('✅ Utilisation url:', image.url);
-      return image.url;
+    if (media.url) {
+      console.log('✅ Utilisation url:', media.url);
+      return media.url;
     }
-    if (image.image_url) {
-      console.log('✅ Utilisation image_url:', image.image_url);
-      return image.image_url;
-    }
-    if (image.path) {
-      console.log('✅ Utilisation path:', image.path);
-      return image.path;
-    }
-    if (image.src) {
-      console.log('✅ Utilisation src:', image.src);
-      return image.src;
+    if (media.image_url) {
+      console.log('✅ Utilisation image_url:', media.image_url);
+      return media.image_url;
     }
     
-    // Fallback : essayer de construire l'URL depuis l'API
-    if (image.id && image.id !== 'main') {
-      const fallbackUrl = `${API_CONFIG.BASE_URL}/storage/products/${image.id}`;
-      console.log('⚠️ Fallback URL construite:', fallbackUrl);
-      return fallbackUrl;
-    }
-    
-    console.warn('❌ Impossible de trouver l\'URL pour l\'image:', image);
+    console.warn('❌ Impossible de trouver l\'URL pour le média:', media);
     return null;
   };
 
@@ -231,7 +230,7 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
               {images.map((image) => {
                 console.log('🖼️ Rendu image dans le map:', image);
                 console.log('🖼️ Clés de l\'image:', Object.keys(image));
-                const imageUrl = getImageUrl(image);
+                const imageUrl = getMediaUrl(image);
                 console.log('🖼️ URL générée:', imageUrl);
                 
                 return (
@@ -274,24 +273,36 @@ const ImageManager = ({ product, onClose, onUpdate }) => {
               Vidéos ({videos.length})
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {videos.map((video) => (
-                <div key={video.id} className="relative">
-                  <video
-                    src={video.media_path}
-                    className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                    controls
-                  />
-                  {/* Bouton de suppression visible */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteMedia(video.id, 'video')}
-                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-lg"
-                  >
-                    <TrashIcon className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+              {videos.map((video) => {
+                const videoUrl = getMediaUrl(video);
+                console.log('🎥 URL vidéo générée:', videoUrl);
+                
+                return (
+                  <div key={video.id} className="relative">
+                    <video
+                      src={videoUrl}
+                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      controls
+                      onError={(e) => {
+                        console.error('❌ Erreur chargement vidéo:', video);
+                        console.error('❌ Élément video:', e.target);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Vidéo chargée avec succès:', video);
+                      }}
+                    />
+                    {/* Bouton de suppression visible */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteMedia(video.id, 'video')}
+                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white p-1 rounded-full shadow-lg"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

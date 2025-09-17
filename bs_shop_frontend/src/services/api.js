@@ -7,6 +7,22 @@ const CACHE_TTL = 0; // Cache désactivé
 // Configuration de l'API
 const API_BASE_URL = API_CONFIG.BASE_URL;
 
+// Fonction pour récupérer le cookie CSRF
+async function getCsrfCookie() {
+  try {
+    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/sanctum/csrf-cookie`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      console.warn('Impossible de récupérer le cookie CSRF');
+    }
+  } catch (error) {
+    console.warn('Erreur lors de la récupération du cookie CSRF:', error);
+  }
+}
+
 // Classe pour gérer les erreurs API
 class ApiError extends Error {
   constructor(message, status, errors = {}) {
@@ -30,6 +46,7 @@ async function apiRequest(endpoint, options = {}) {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
+    credentials: 'include', // Important pour les cookies CSRF
   };
 
   // Ajouter le token d'authentification si disponible
@@ -96,6 +113,7 @@ async function apiRequest(endpoint, options = {}) {
     );
   }
 }
+
 
 // Service d'authentification
 export const authService = {
@@ -303,6 +321,25 @@ export const productService = {
     return await this.getProducts();
   },
 
+  // Récupérer tous les produits (Admin - avec tous les produits)
+  async getProductsAdmin(filters = {}) {
+    const queryParams = new URLSearchParams();
+    
+    if (filters.category_id) queryParams.append('category_id', filters.category_id);
+    if (filters.subcategory_id) queryParams.append('subcategory_id', filters.subcategory_id);
+    if (filters.search) queryParams.append('search', filters.search);
+    if (filters.status) queryParams.append('status', filters.status);
+    if (filters.min_price) queryParams.append('min_price', filters.min_price);
+    if (filters.max_price) queryParams.append('max_price', filters.max_price);
+    if (filters.sort_by) queryParams.append('sort_by', filters.sort_by);
+    if (filters.sort_order) queryParams.append('sort_order', filters.sort_order);
+    if (filters.page) queryParams.append('page', filters.page);
+    if (filters.per_page) queryParams.append('per_page', filters.per_page);
+
+    const endpoint = `/admin/products${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return await apiRequest(endpoint);
+  },
+
   // Récupérer un produit spécifique
   async getProduct(id) {
     return await apiRequest(`/products/${id}`);
@@ -328,6 +365,14 @@ export const productService = {
   async deleteProduct(id) {
     return await apiRequest(`/admin/products/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  // Créer plusieurs produits en masse (Admin)
+  async createProductsBatch(productsData) {
+    return await apiRequest('/admin/products/batch', {
+      method: 'POST',
+      body: JSON.stringify(productsData),
     });
   }
 };
@@ -365,6 +410,14 @@ export const variantService = {
     return await apiRequest(`/admin/products/${productId}/variants/${variantId}`, {
       method: 'DELETE',
     });
+  },
+
+  // Créer plusieurs variantes en batch (Admin)
+  async createVariantsBatch(productId, variantsData) {
+    return await apiRequest(`/admin/products/${productId}/variants/batch`, {
+      method: 'POST',
+      body: JSON.stringify({ variants: variantsData }),
+    });
   }
 };
 
@@ -386,14 +439,20 @@ export const imageService = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    console.log('📤 Envoi vers:', url);
+    console.log('📤 FormData:', formData);
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
       body: formData, // Pas de Content-Type pour FormData
     });
 
+    console.log('📡 Réponse status:', response.status);
+
     if (!response.ok) {
       const data = await response.json();
+      console.error('❌ Erreur API:', data);
       throw new ApiError(
         data.message || 'Erreur lors de l\'upload des images',
         response.status,

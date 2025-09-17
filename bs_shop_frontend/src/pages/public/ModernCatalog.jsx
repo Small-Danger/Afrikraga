@@ -7,9 +7,16 @@ const ModernCatalog = () => {
   const { categorySlug, subcategorySlug } = useParams();
   const [currentCategory, setCurrentCategory] = useState(null);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [displayedProducts, setDisplayedProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Pagination côté client
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreProducts, setHasMoreProducts] = useState(false);
+  const PRODUCTS_PER_PAGE = 12;
   
   // Cache désactivé temporairement
   const cacheRef = useRef(new Map());
@@ -139,6 +146,11 @@ const ModernCatalog = () => {
             const { data, timestamp } = JSON.parse(sessionCached);
             if (Date.now() - timestamp < SESSION_CACHE_TTL_PRODUCTS) {
               setFilteredProducts(data);
+              // Initialiser l'affichage avec les premiers produits
+              const initialProducts = data.slice(0, PRODUCTS_PER_PAGE);
+              setDisplayedProducts(initialProducts);
+              setHasMoreProducts(data.length > PRODUCTS_PER_PAGE);
+              setCurrentPage(1);
               setLoading(false);
               return;
             }
@@ -152,11 +164,16 @@ const ModernCatalog = () => {
         const cached = cacheRef.current.get(cacheKey);
         if (cached && Date.now() - cached.timestamp < 3 * 60 * 1000) { // 3 minutes
           setFilteredProducts(cached.data);
+          // Initialiser l'affichage avec les premiers produits
+          const initialProducts = cached.data.slice(0, PRODUCTS_PER_PAGE);
+          setDisplayedProducts(initialProducts);
+          setHasMoreProducts(cached.data.length > PRODUCTS_PER_PAGE);
+          setCurrentPage(1);
           setLoading(false);
           return;
         }
         
-        const productsResponse = await productService.getProducts(filters);
+        const productsResponse = await productService.getProducts({ ...filters, per_page: 100 });
         
         if (productsResponse.success) {
           let products = productsResponse.data.products;
@@ -167,6 +184,12 @@ const ModernCatalog = () => {
           }
           
           setFilteredProducts(products);
+          
+          // Initialiser l'affichage avec les premiers produits
+          const initialProducts = products.slice(0, PRODUCTS_PER_PAGE);
+          setDisplayedProducts(initialProducts);
+          setHasMoreProducts(products.length > PRODUCTS_PER_PAGE);
+          setCurrentPage(1);
           
           // Mettre en cache de session
           try {
@@ -198,6 +221,36 @@ const ModernCatalog = () => {
     
     loadProducts();
   }, [categorySlug, subcategorySlug, categories]);
+
+  // Fonction pour charger plus de produits
+  const loadMoreProducts = useCallback(async () => {
+    if (loadingMore || !hasMoreProducts) return;
+    
+    setLoadingMore(true);
+    
+    // Simuler un délai pour l'UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const nextPage = currentPage + 1;
+    const startIndex = currentPage * PRODUCTS_PER_PAGE; // Utiliser currentPage au lieu de nextPage
+    const endIndex = startIndex + PRODUCTS_PER_PAGE;
+    const nextProducts = filteredProducts.slice(startIndex, endIndex);
+    
+    console.log('🔄 Chargement plus de produits:', {
+      currentPage,
+      nextPage,
+      startIndex,
+      endIndex,
+      nextProductsCount: nextProducts.length,
+      totalFiltered: filteredProducts.length,
+      displayedCount: displayedProducts.length
+    });
+    
+    setDisplayedProducts(prev => [...prev, ...nextProducts]);
+    setCurrentPage(nextPage);
+    setHasMoreProducts(endIndex < filteredProducts.length);
+    setLoadingMore(false);
+  }, [loadingMore, hasMoreProducts, currentPage, filteredProducts, displayedProducts.length]);
 
   // Affichage du chargement
   if (loading) {
@@ -580,7 +633,7 @@ const ModernCatalog = () => {
                 )}
 
                 {/* Affichage des produits (seulement si des produits existent) */}
-                {filteredProducts.length > 0 && (
+                {displayedProducts.length > 0 && (
                   <div>
                     <h3 className="text-3xl font-bold text-gray-900 mb-8 flex items-center">
                       <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center mr-4">
@@ -596,23 +649,40 @@ const ModernCatalog = () => {
                       }
                     </h3>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {filteredProducts.map((product, index) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+                      {displayedProducts.map((product, index) => (
                         <Link
                           key={product.id}
                           to={`/products/${product.id}`}
-                          className="block group"
+                          className="block group touch-manipulation"
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
-                          <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 transform-gpu border border-gray-100 animate-fade-in-up h-96 flex flex-col">
-                            {/* Image du produit - Hauteur fixe et optimisée */}
-                            <div className="h-64 bg-gray-50 relative overflow-hidden flex items-center justify-center flex-shrink-0">
+                          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-lg sm:shadow-xl overflow-hidden hover:shadow-xl sm:hover:shadow-2xl transition-all duration-500 sm:duration-700 hover:-translate-y-2 sm:hover:-translate-y-3 transform-gpu border border-gray-100 animate-fade-in-up h-[380px] sm:h-[420px] flex flex-col relative active:scale-95">
+                            {/* Badge de nouveauté ou promotion (optionnel) - Mobile optimisé */}
+                            <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10">
+                              <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-bold shadow-lg">
+                                <span className="hidden sm:inline">Nouveau</span>
+                                <span className="sm:hidden">NEW</span>
+                              </div>
+                            </div>
+                            
+                            {/* Badge de prix flottant - Mobile optimisé */}
+                            <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+                              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl shadow-xl backdrop-blur-sm">
+                                <span className="text-xs sm:text-sm font-bold">
+                                  {Math.round(Number(product.base_price || 0))} FCFA
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Image du produit - Mobile first optimisé */}
+                            <div className="h-64 sm:h-72 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden flex items-center justify-center flex-shrink-0">
                               {product.image_main ? (
-                                <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+                                <div className="w-full h-full flex items-center justify-center p-3 sm:p-4">
                                   <img
                                     src={product.image_main}
                                     alt={product.name}
-                                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out rounded-lg"
+                                    className="w-full h-full object-cover object-center group-hover:scale-105 sm:group-hover:scale-110 transition-transform duration-500 sm:duration-700 ease-out rounded-xl sm:rounded-2xl shadow-lg"
                                     style={{
                                       imageRendering: 'high-quality',
                                       WebkitImageRendering: 'high-quality'
@@ -626,78 +696,131 @@ const ModernCatalog = () => {
                                 </div>
                               ) : null}
                               
-                              {/* Image de fallback pour les produits */}
-                              <div className={`w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${product.image_main ? 'hidden' : 'flex'}`}>
+                              {/* Image de fallback premium - Mobile optimisé */}
+                              <div className={`w-full h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center ${product.image_main ? 'hidden' : 'flex'}`}>
                                 <div className="text-center">
-                                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg">
-                                    <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-2 sm:mb-3 shadow-xl">
+                                    <svg className="w-8 h-8 sm:w-10 sm:h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                                     </svg>
                                   </div>
-                                  <span className="text-gray-600 font-medium text-xs">Produit</span>
+                                  <span className="text-blue-600 font-semibold text-xs sm:text-sm">Produit Premium</span>
                                 </div>
                               </div>
                               
-                              {/* Badge de prix flottant - Toujours visible */}
-                              <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg">
-                                <span className="text-sm font-bold text-blue-600">
-                                  {Math.round(Number(product.base_price || 0))} FCFA
-                                </span>
-                              </div>
+                              {/* Overlay premium au survol - Desktop seulement */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 sm:group-hover:opacity-100 transition-opacity duration-500 hidden sm:block"></div>
                               
-                              {/* Overlay au survol */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                              {/* Bouton d'action rapide au survol - Desktop seulement */}
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 sm:group-hover:opacity-100 transition-all duration-500 transform translate-y-4 sm:group-hover:translate-y-0 hidden sm:flex">
+                                <div className="bg-white/95 backdrop-blur-md px-4 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl shadow-2xl">
+                                  <span className="text-gray-800 font-semibold text-xs sm:text-sm flex items-center">
+                                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    Voir détails
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                             
-                            {/* Contenu du produit - Structure fixe pour éviter les coupures */}
-                            <div className="p-4 flex-1 flex flex-col">
-                              {/* Titre - Hauteur fixe */}
-                              <div className="mb-3 h-12 flex items-start">
-                                <h3 className="font-bold text-gray-900 text-base line-clamp-2 group-hover:text-blue-600 transition-colors duration-300 leading-tight">
+                            {/* Contenu du produit - Mobile first optimisé */}
+                            <div className="p-4 sm:p-6 flex-1 flex flex-col relative">
+                              {/* Titre - Mobile optimisé */}
+                              <div className="mb-3 sm:mb-4 h-12 sm:h-14 flex items-start">
+                                <h3 className="font-bold text-gray-900 text-base sm:text-lg line-clamp-2 group-hover:text-blue-600 transition-colors duration-300 leading-tight">
                                   {product.name}
                                 </h3>
                               </div>
                               
-                              {/* Description - Hauteur fixe */}
-                              <div className="mb-4 h-10 flex items-start">
+                              {/* Description - Mobile optimisé */}
+                              <div className="mb-4 sm:mb-5 h-10 sm:h-12 flex items-start">
                                 {product.description ? (
-                                  <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
+                                  <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 leading-relaxed">{product.description}</p>
                                 ) : (
                                   <div className="h-full"></div>
                                 )}
                               </div>
                               
-                              {/* Prix - Toujours visible en bas */}
+                              {/* Prix et CTA - Mobile first design */}
                               <div className="mt-auto">
-                                <div className="flex items-center justify-between mb-3">
-                                  <div>
-                                    <span className="text-xl font-bold text-blue-600">
+                                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-lg sm:text-2xl font-bold text-gray-900">
                                       {Math.round(Number(product.base_price || 0))} FCFA
                                     </span>
+                                    <span className="text-xs text-gray-500 hidden sm:block">Prix unitaire</span>
                                   </div>
-                                  <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full flex items-center justify-center group-hover:from-blue-200 group-hover:to-indigo-200 transition-all duration-300 group-hover:scale-110">
-                                    <svg className="w-4 h-4 text-blue-600 group-hover:translate-x-0.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl sm:rounded-2xl flex items-center justify-center group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-300 group-hover:scale-110 shadow-lg">
+                                    <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                     </svg>
                                   </div>
                                 </div>
                                 
-                                {/* Footer avec CTA */}
+                                {/* Footer commercial - Mobile optimisé */}
                                 <div className="flex items-center justify-between">
-                                  <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">Voir détails</span>
-                                  <span className="text-xs text-gray-400">Cliquez pour voir</span>
+                                  <div className="flex items-center space-x-1.5 sm:space-x-2">
+                                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
+                                    <span className="text-xs text-gray-500 font-medium">En stock</span>
+                                  </div>
+                                  <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 sm:px-3 sm:py-1 rounded-full">
+                                    Voir
+                                  </span>
                                 </div>
                               </div>
                             </div>
+                            
+                            {/* Bordure d'accent au survol - Desktop seulement */}
+                            <div className="absolute inset-0 rounded-2xl sm:rounded-3xl border-2 border-transparent sm:group-hover:border-blue-200 transition-all duration-500 pointer-events-none hidden sm:block"></div>
                           </div>
                         </Link>
                       ))}
                     </div>
+                    
+                    {/* Bouton "Voir plus" - Mobile first optimisé */}
+                    {hasMoreProducts && (
+                      <div className="flex justify-center mt-12 sm:mt-16 px-4">
+                        <button
+                          onClick={loadMoreProducts}
+                          disabled={loadingMore}
+                          className="group relative inline-flex items-center justify-center px-6 py-4 sm:px-10 sm:py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold rounded-2xl sm:rounded-3xl shadow-xl sm:shadow-2xl hover:shadow-2xl sm:hover:shadow-3xl transform hover:scale-105 transition-all duration-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none overflow-hidden w-full sm:w-auto max-w-sm sm:max-w-none"
+                        >
+                          {/* Effet de brillance au survol - Desktop seulement */}
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full sm:group-hover:translate-x-full transition-transform duration-1000 hidden sm:block"></div>
+                          
+                          {loadingMore ? (
+                            <>
+                              <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 sm:border-3 border-white border-t-transparent rounded-full animate-spin mr-3 sm:mr-4"></div>
+                              <span className="text-sm sm:text-lg">Chargement...</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center space-x-2 sm:space-x-3 w-full justify-center">
+                                <svg className="w-5 h-5 sm:w-6 sm:h-6 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                <span className="text-sm sm:text-lg">Plus de produits</span>
+                                <div className="flex items-center space-x-1 sm:space-x-2">
+                                  <span className="text-xs sm:text-sm bg-white/25 px-2 py-1 sm:px-3 sm:py-1 rounded-full font-semibold">
+                                    +{filteredProducts.length - displayedProducts.length}
+                                  </span>
+                                  <svg className="w-4 h-4 sm:w-6 sm:h-6 group-hover:translate-x-1 sm:group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* Message si aucun produit ni sous-catégorie */}
-                {filteredProducts.length === 0 && (!currentCategory.subcategories || currentCategory.subcategories.length === 0) && (
+                {displayedProducts.length === 0 && (!currentCategory.subcategories || currentCategory.subcategories.length === 0) && (
                   <div className="text-center py-20 bg-white rounded-3xl shadow-lg border border-gray-100">
                     <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-8">
                       <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -725,7 +848,7 @@ const ModernCatalog = () => {
         )}
       </div>
 
-      {/* Styles CSS modernes */}
+      {/* Styles CSS modernes et commerciaux */}
       <style>{`
         .line-clamp-2 {
           display: -webkit-box;
@@ -744,7 +867,7 @@ const ModernCatalog = () => {
           display: none;
         }
         
-        /* Animations modernes */
+        /* Animations commerciales modernes */
         @keyframes slideInDown {
           from {
             opacity: 0;
@@ -767,12 +890,38 @@ const ModernCatalog = () => {
           }
         }
         
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+        
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+        
         .animate-slide-in-down {
           animation: slideInDown 0.5s ease-out;
         }
         
         .animate-fade-in-up {
           animation: fadeInUp 0.6s ease-out both;
+        }
+        
+        .animate-pulse {
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
         }
         
         /* Effet de pression tactile */
@@ -786,11 +935,133 @@ const ModernCatalog = () => {
           transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        /* Optimisations pour mobile */
+        /* Effets commerciaux premium */
+        .shadow-3xl {
+          box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .border-3 {
+          border-width: 3px;
+        }
+        
+        /* Effet de glassmorphism */
+        .glass-effect {
+          background: rgba(255, 255, 255, 0.25);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        /* Gradient animé pour les boutons */
+        .gradient-animated {
+          background: linear-gradient(-45deg, #3b82f6, #6366f1, #8b5cf6, #ec4899);
+          background-size: 400% 400%;
+          animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+        
+        /* Effet de hover pour les cartes produits */
+        .product-card:hover {
+          transform: translateY(-8px) scale(1.02);
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        /* Animation de chargement personnalisée */
+        .loading-dots::after {
+          content: '';
+          animation: loadingDots 1.5s infinite;
+        }
+        
+        @keyframes loadingDots {
+          0%, 20% {
+            content: '';
+          }
+          40% {
+            content: '.';
+          }
+          60% {
+            content: '..';
+          }
+          80%, 100% {
+            content: '...';
+          }
+        }
+        
+        /* Optimisations mobile-first */
         @media (max-width: 640px) {
           .animate-fade-in-up {
             animation-delay: 0s !important;
           }
+          
+          .product-card:hover {
+            transform: translateY(-2px) scale(1.005);
+          }
+          
+          /* Amélioration de la zone tactile */
+          .touch-manipulation {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+          }
+          
+          /* Optimisation des transitions pour mobile */
+          .group:active {
+            transform: scale(0.98);
+            transition: transform 0.1s ease-out;
+          }
+          
+          /* Amélioration de la lisibilité sur mobile */
+          .text-shadow-mobile {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+          }
+          
+          /* Espacement optimisé pour les doigts */
+          .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+          }
+        }
+        
+        /* Optimisations pour tablettes */
+        @media (min-width: 641px) and (max-width: 1024px) {
+          .product-card:hover {
+            transform: translateY(-6px) scale(1.015);
+          }
+        }
+        
+        /* Optimisations pour desktop */
+        @media (min-width: 1025px) {
+          .product-card:hover {
+            transform: translateY(-8px) scale(1.02);
+          }
+        }
+        
+        /* Effet de parallaxe subtil */
+        .parallax-bg {
+          background-attachment: fixed;
+          background-position: center;
+          background-repeat: no-repeat;
+          background-size: cover;
+        }
+        
+        /* Amélioration de la lisibilité */
+        .text-shadow {
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Effet de focus amélioré pour l'accessibilité */
+        .focus-ring:focus {
+          outline: 2px solid #3b82f6;
+          outline-offset: 2px;
         }
       `}</style>
     </div>

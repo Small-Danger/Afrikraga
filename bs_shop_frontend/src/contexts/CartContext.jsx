@@ -115,22 +115,15 @@ export function CartProvider({ children }) {
   }, [state, getTotalItems, getTotalPrice]);
 
   const addItem = useCallback((item) => {
-    setIsUpdating(true);
     dispatch({ type: 'ADD_ITEM', payload: item });
-    // L'effet ci-dessus gérera la notification
-    setTimeout(() => setIsUpdating(false), 100);
   }, [])
 
   const removeItem = useCallback((itemId) => {
-    setIsUpdating(true);
     dispatch({ type: 'REMOVE_ITEM', payload: itemId });
-    setTimeout(() => setIsUpdating(false), 100);
   }, [])
 
   const updateQuantity = useCallback((itemId, quantity) => {
-    setIsUpdating(true);
     dispatch({ type: 'UPDATE_QUANTITY', payload: { id: itemId, quantity } });
-    setTimeout(() => setIsUpdating(false), 100);
   }, [])
 
   const clearCart = useCallback(() => {

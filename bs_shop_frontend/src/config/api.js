@@ -1,9 +1,11 @@
 // Configuration de l'API
+import { CONTACT_CONFIG } from './contact';
+
 export const API_CONFIG = {
   // URL de base de l'API (peut être surchargée par les variables d'environnement)
   // Pour tester sur téléphone, remplacez localhost par l'IP de votre ordinateur
   // Exemple: 'http://192.168.11.180:8000/api'
-  BASE_URL: import.meta.env.VITE_API_URL || 'https://web-production-7228.up.railway.app/api',
+  BASE_URL: import.meta.env.VITE_API_URL || 'https://api.afrikraga.com/api',
   
   // Timeout des requêtes (en millisecondes)
   TIMEOUT: 30000,
@@ -110,7 +112,7 @@ export const FORMAT_CONFIG = {
   DATETIME_FORMAT: 'DD/MM/YYYY HH:mm',
   TIME_FORMAT: 'HH:mm',
   CURRENCY_FORMAT: '0,0.00',
-  PHONE_FORMAT: '+33 6 ## ## ## ##',
+  PHONE_FORMAT: CONTACT_CONFIG.PHONE_FORMAT,
 };
 
 // Configuration des validations

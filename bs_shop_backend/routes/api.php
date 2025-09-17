@@ -105,7 +105,9 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::post('/categories/{id}/image', [CategoryController::class, 'uploadImage']);
     
     // Gestion des produits
+    Route::get('/products', [ProductController::class, 'adminIndex']); // Liste des produits pour l'admin
     Route::post('/products', [ProductController::class, 'store']);
+    Route::post('/products/batch', [ProductController::class, 'storeBatch']); // Création en masse
     Route::put('/products/{id}', [ProductController::class, 'update']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy']);
     
@@ -113,6 +115,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::prefix('products/{productId}/variants')->group(function () {
         Route::get('/', [VariantController::class, 'adminIndex']); // Route admin pour toutes les variantes
         Route::post('/', [VariantController::class, 'store']);
+        Route::post('/batch', [VariantController::class, 'storeBatch']); // Création en batch
         Route::put('/{variantId}', [VariantController::class, 'update']);
         Route::delete('/{variantId}', [VariantController::class, 'destroy']);
     });

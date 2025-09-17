@@ -130,7 +130,7 @@ class OrderController extends Controller
                 $tempUser = User::create([
                     'name' => 'Client ' . substr($request->session_id, -6),
                     'email' => 'temp_' . time() . '@bs-shop.com',
-                    'whatsapp_phone' => '+33000000000', // Téléphone temporaire
+                    'whatsapp_phone' => '+22663126849', // Téléphone de contact
                     'role' => 'client',
                     'password' => bcrypt(Str::random(16)),
                     'is_active' => true
@@ -177,8 +177,8 @@ class OrderController extends Controller
                         'total_price' => $totalPrice
                     ]);
 
-                    // Mettre à jour le stock si c'est une variante
-                    if ($cartItem->variant && $cartItem->variant->stock_quantity !== null) {
+                    // Mettre à jour le stock si c'est une variante (seulement si stock limité)
+                    if ($cartItem->variant && $cartItem->variant->stock_quantity !== null && $cartItem->variant->stock_quantity > 0) {
                         $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
                     }
                 }
@@ -448,7 +448,7 @@ class OrderController extends Controller
                 $tempUser = User::create([
                     'name' => 'Client ' . substr($request->session_id, -6),
                     'email' => 'temp_' . time() . '@bs-shop.com',
-                    'whatsapp_phone' => '+33000000000', // Téléphone temporaire
+                    'whatsapp_phone' => '+22663126849', // Téléphone de contact
                     'role' => 'client',
                     'password' => bcrypt(Str::random(16)),
                     'is_active' => true
@@ -493,8 +493,8 @@ class OrderController extends Controller
                         'total_price' => $totalPrice
                     ]);
 
-                    // Mettre à jour le stock si c'est une variante
-                    if ($cartItem->variant && $cartItem->variant->stock_quantity !== null) {
+                    // Mettre à jour le stock si c'est une variante (seulement si stock limité)
+                    if ($cartItem->variant && $cartItem->variant->stock_quantity !== null && $cartItem->variant->stock_quantity > 0) {
                         $cartItem->variant->decrement('stock_quantity', $cartItem->quantity);
                     }
                 }

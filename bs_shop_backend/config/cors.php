@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'sanctum/*'],
 
     'allowed_methods' => ['*'],
 
@@ -23,22 +23,16 @@ return [
         'http://localhost:5173', 
         'http://localhost:3000', 
         'http://localhost:8080',
-        'http://192.168.11.180:5173', // Votre frontend spécifique
-        'http://192.168.11.180:3000', // Alternative possible
-        'http://192.168.11.180:8080', // Alternative possible
-        'http://192.168.11.0/24', // Réseau local 192.168.11.x
-        'http://10.0.0.0/8',     // Réseau local 10.x.x.x
-        'http://172.16.0.0/12',   // Réseau local 172.16-31.x.x
-        // Ajout d'origines plus permissives pour le développement
-        'http://192.168.11.*:5173',
-        'http://192.168.11.*:3000',
-        'http://192.168.11.*:8080',
-        // URLs Railway
-        'https://africafrontend-production.up.railway.app',
-        'https://*.up.railway.app'
+        'https://afrikraga.com',
+        'https://www.afrikraga.com',
+        'https://api.afrikraga.com'
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        'http://192.168.11.*:5173',
+        'http://192.168.11.*:3000',
+        'http://192.168.11.*:8080'
+    ],
 
     'allowed_headers' => ['*'],
 
@@ -47,5 +41,7 @@ return [
     'max_age' => 0,
 
     'supports_credentials' => true,
+
+    'allowed_credentials' => true,
 
 ];

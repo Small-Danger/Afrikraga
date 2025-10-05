@@ -912,8 +912,11 @@ class ProductController extends Controller
     {
         try {
             // Augmenter les limites pour les gros volumes
-            ini_set('memory_limit', '512M');
-            ini_set('max_execution_time', 300);
+            ini_set('memory_limit', '1024M'); // Augmenté à 1GB
+            ini_set('max_execution_time', 600); // Augmenté à 10 minutes
+            ini_set('max_input_time', 300); // Limite d'entrée
+            ini_set('post_max_size', '100M'); // Taille max des données POST
+            ini_set('upload_max_filesize', '50M'); // Taille max des fichiers
             // Validation des données de création en masse
             $validator = Validator::make($request->all(), [
                 'category_id' => 'required|exists:categories,id',
@@ -931,7 +934,9 @@ class ProductController extends Controller
                 'products.*.variants.*.sku' => 'nullable|string|max:100',
                 'products.*.variants.*.stock_quantity' => 'nullable|integer|min:0',
                 'products.*.variants.*.is_active' => 'nullable|boolean',
-                'products.*.variants.*.sort_order' => 'nullable|integer|min:0'
+                'products.*.variants.*.sort_order' => 'nullable|integer|min:0',
+                // Limite de variantes par produit
+                'products.*.variants' => 'max:5' // Maximum 5 variantes par produit
             ], [
                 'category_id.required' => 'La catégorie est obligatoire',
                 'category_id.exists' => 'La catégorie sélectionnée n\'existe pas',
@@ -948,7 +953,8 @@ class ProductController extends Controller
                 'products.*.image_main.required' => 'L\'image principale est obligatoire',
                 'products.*.is_active.boolean' => 'Le statut actif doit être vrai ou faux',
                 'products.*.sort_order.integer' => 'L\'ordre doit être un nombre entier',
-                'products.*.sort_order.min' => 'L\'ordre ne peut pas être négatif'
+                'products.*.sort_order.min' => 'L\'ordre ne peut pas être négatif',
+                'products.*.variants.max' => 'Maximum 5 variantes par produit'
             ]);
 
             // Si validation échoue, retourner les erreurs
@@ -978,11 +984,15 @@ class ProductController extends Controller
                 $sortOrder = 0;
                 
                 // Optimisation pour gros volumes : traiter par petits lots
-                $batchSize = 10;
+                $batchSize = 3; // Réduit à 3 pour éviter la surcharge avec variantes
                 $products = array_chunk($request->products, $batchSize);
 
                 foreach ($products as $productBatch) {
-                    foreach ($productBatch as $productData) {
+                    // Commencer une sous-transaction pour chaque lot
+                    \DB::beginTransaction();
+                    
+                    try {
+                        foreach ($productBatch as $productData) {
                     // Générer le slug unique à partir du nom
                     $slug = Str::slug($productData['name']);
                     $originalSlug = $slug;
@@ -994,15 +1004,22 @@ class ProductController extends Controller
                         $counter++;
                     }
 
-                    // Uploader l'image vers Cloudinary
+                    // Uploader l'image vers Cloudinary avec optimisation
                     $imageUrl = null;
                     if (isset($productData['image_main']) && $productData['image_main']) {
-                        $uploadResult = $cloudinaryService->uploadBase64Image($productData['image_main'], 'bs_shop/products');
+                        // Optimiser l'image avant upload
+                        $optimizedImage = $this->optimizeBase64Image($productData['image_main']);
+                        
+                        $uploadResult = $cloudinaryService->uploadBase64Image($optimizedImage, 'bs_shop/products');
                         if ($uploadResult['success']) {
                             $imageUrl = $uploadResult['secure_url'];
                         } else {
                             throw new \Exception('Erreur lors de l\'upload de l\'image pour le produit: ' . $productData['name']);
                         }
+                        
+                        // Libérer la mémoire
+                        unset($optimizedImage);
+                        unset($productData['image_main']);
                     }
 
                     // Créer le produit
@@ -1017,31 +1034,40 @@ class ProductController extends Controller
                         'is_active' => $productData['is_active'] ?? true
                     ]);
 
-                    // Créer les variantes si elles existent
+                    // Créer les variantes si elles existent - Optimisé pour gros volumes
                     $createdVariants = [];
                     \Log::info('Données du produit reçues:', ['product' => $productData]);
                     if (isset($productData['variants']) && is_array($productData['variants']) && count($productData['variants']) > 0) {
                         \Log::info('Variantes trouvées pour le produit:', ['variants' => $productData['variants']]);
-                        foreach ($productData['variants'] as $variantData) {
-                            $variant = $product->variants()->create([
+                        
+                        // Préparer les données des variantes pour insertion en masse
+                        $variantsToInsert = [];
+                        foreach ($productData['variants'] as $index => $variantData) {
+                            $variantsToInsert[] = [
+                                'product_id' => $product->id,
                                 'name' => $variantData['name'],
                                 'price' => $variantData['price'],
                                 'sku' => $variantData['sku'] ?? null,
                                 'stock_quantity' => $variantData['stock_quantity'] ?? 0,
                                 'is_active' => $variantData['is_active'] ?? true,
-                                'sort_order' => $variantData['sort_order'] ?? 0
-                            ]);
-                            
-                            $createdVariants[] = [
-                                'id' => $variant->id,
-                                'name' => $variant->name,
-                                'price' => $variant->price,
-                                'sku' => $variant->sku,
-                                'stock_quantity' => $variant->stock_quantity,
-                                'is_active' => $variant->is_active,
-                                'sort_order' => $variant->sort_order
+                                'sort_order' => $variantData['sort_order'] ?? $index,
+                                'created_at' => now(),
+                                'updated_at' => now()
                             ];
                         }
+                        
+                        // Insertion en masse des variantes
+                        \DB::table('product_variants')->insert($variantsToInsert);
+                        
+                        // Récupérer les variantes créées pour la réponse
+                        $createdVariants = \DB::table('product_variants')
+                            ->where('product_id', $product->id)
+                            ->select('id', 'name', 'price', 'sku', 'stock_quantity', 'is_active', 'sort_order')
+                            ->get()
+                            ->toArray();
+                            
+                        // Libérer la mémoire des données de variantes
+                        unset($variantsToInsert);
                     }
 
                     $productResponse = [
@@ -1063,9 +1089,23 @@ class ProductController extends Controller
 
                         $sortOrder++;
                     }
+                    
+                    // Valider la sous-transaction
+                    \DB::commit();
+                    
+                    // Libérer la mémoire après chaque lot
+                    if (function_exists('gc_collect_cycles')) {
+                        gc_collect_cycles();
+                    }
+                    
+                    } catch (\Exception $e) {
+                        // Annuler la sous-transaction en cas d'erreur
+                        \DB::rollback();
+                        throw $e;
+                    }
                 }
-
-                // Valider la transaction
+                
+                // Valider la transaction principale
                 \DB::commit();
 
                 // Invalider le cache des produits
@@ -1084,7 +1124,6 @@ class ProductController extends Controller
                         ]
                     ]
                 ], 201);
-
             } catch (\Exception $e) {
                 // Annuler la transaction en cas d'erreur
                 \DB::rollback();
@@ -1097,6 +1136,67 @@ class ProductController extends Controller
                 'message' => 'Erreur lors de la création en masse des produits',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Optimise une image base64 pour réduire sa taille
+     */
+    private function optimizeBase64Image($base64Image, $maxWidth = 800, $quality = 80)
+    {
+        try {
+            // Décoder l'image base64
+            $imageData = base64_decode(preg_replace('#^data:image/[^;]+;base64,#', '', $base64Image));
+            
+            // Créer une ressource d'image
+            $image = imagecreatefromstring($imageData);
+            if (!$image) {
+                return $base64Image; // Retourner l'original si l'optimisation échoue
+            }
+            
+            // Obtenir les dimensions originales
+            $originalWidth = imagesx($image);
+            $originalHeight = imagesy($image);
+            
+            // Calculer les nouvelles dimensions
+            if ($originalWidth <= $maxWidth) {
+                imagedestroy($image);
+                return $base64Image; // Pas besoin d'optimiser
+            }
+            
+            $newHeight = ($originalHeight * $maxWidth) / $originalWidth;
+            
+            // Créer une nouvelle image redimensionnée
+            $optimizedImage = imagecreatetruecolor($maxWidth, $newHeight);
+            
+            // Préserver la transparence pour PNG
+            imagealphablending($optimizedImage, false);
+            imagesavealpha($optimizedImage, true);
+            
+            // Redimensionner l'image
+            imagecopyresampled(
+                $optimizedImage, $image,
+                0, 0, 0, 0,
+                $maxWidth, $newHeight,
+                $originalWidth, $originalHeight
+            );
+            
+            // Capturer l'image optimisée
+            ob_start();
+            imagejpeg($optimizedImage, null, $quality);
+            $optimizedData = ob_get_contents();
+            ob_end_clean();
+            
+            // Nettoyer la mémoire
+            imagedestroy($image);
+            imagedestroy($optimizedImage);
+            
+            // Retourner l'image optimisée en base64
+            return 'data:image/jpeg;base64,' . base64_encode($optimizedData);
+            
+        } catch (\Exception $e) {
+            \Log::warning('Erreur lors de l\'optimisation de l\'image: ' . $e->getMessage());
+            return $base64Image; // Retourner l'original en cas d'erreur
         }
     }
 

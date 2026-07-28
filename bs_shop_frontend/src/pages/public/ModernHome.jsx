@@ -11,10 +11,39 @@ import {
 } from 'lucide-react';
 import { categoryService, productService } from '../../services/api';
 import ProductCard from '../../components/ProductCard';
+import ProductCarousel from '../../components/ProductCarousel';
 import SimpleBannerCarousel from '../../components/SimpleBannerCarousel';
 import useBanners from '../../hooks/useBanners';
 import { ShimmerTextVariants } from '../../components/ShimmerText';
 import { generateWhatsAppLink, CONTACT_CONFIG } from '../../config/contact';
+
+const HeroContent = ({ compact = false }) => (
+  <>
+    <div className="inline-flex items-center gap-2 bg-white rounded-full px-4 py-1.5 mb-3 shadow-sm border border-brand-green/10">
+      <span className="text-lg">🇲🇦</span>
+      <span className="text-sm font-semibold text-brand-green">Produits authentiques du Maroc</span>
+    </div>
+    <h1 className={`font-bold text-gray-900 mb-2 leading-tight ${compact ? 'text-xl' : 'text-2xl lg:text-3xl mb-3'}`}>
+      Huiles, savons, épices &amp; cosmétiques naturels
+    </h1>
+    <p className={`text-gray-600 max-w-2xl mx-auto leading-relaxed ${compact ? 'text-sm mb-5' : 'text-base mb-6'}`}>
+      Découvrez une sélection soignée d&apos;<strong className="text-brand-green">huiles essentielles</strong>,{' '}
+      <strong className="text-brand-green">savons artisanaux</strong>,{' '}
+      <strong className="text-brand-green">épices</strong> et{' '}
+      <strong className="text-brand-green">parfums authentiques</strong> importés directement du Maroc.
+    </p>
+    <Link
+      to="/catalog"
+      className={`inline-flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-dark text-white rounded-2xl font-semibold transition-all shadow-md hover:shadow-lg ${
+        compact ? 'px-6 py-3 text-sm' : 'px-8 py-3.5 text-base hover:scale-[1.02]'
+      }`}
+    >
+      <Sparkles size={18} />
+      Découvrir la boutique
+      <ArrowRight size={18} />
+    </Link>
+  </>
+);
 
 const ModernHome = () => {
   const [categories, setCategories] = useState([]);
@@ -68,7 +97,7 @@ const ModernHome = () => {
         if (productsRes.success) {
           const products = productsRes.data.products || [];
           const shuffled = [...products].sort(() => Math.random() - 0.5);
-          setPopularProducts(shuffled.slice(0, 6));
+          setPopularProducts(shuffled.slice(0, 10));
           setNewProducts(products.slice(0, 8));
         } else {
           setError('Erreur lors du chargement des produits.');
@@ -122,53 +151,47 @@ const ModernHome = () => {
 
   return (
     <div className="min-h-screen bg-brand-cream pb-24 md:pb-8">
-      {/* Hero — bannières en premier */}
-      <section className="relative">
+      {/* ── MOBILE : texte hero (sans logo) + bannière en carte ── */}
+      <section className="md:hidden bg-gradient-to-b from-brand-green-light/60 to-brand-cream">
+        <div className="max-w-6xl mx-auto px-4 pt-5 pb-4 text-center">
+          <HeroContent compact />
+        </div>
+        {banners && banners.length > 0 && (
+          <div className="max-w-6xl mx-auto px-4 pb-6">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+              <div className="h-44 sm:h-52">
+                <SimpleBannerCarousel banners={banners} autoPlay interval={5000} />
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── DESKTOP : bannière pleine largeur + carte chevauchante (version précédente) ── */}
+      <section className="hidden md:block relative">
         {banners && banners.length > 0 ? (
-          <div className="relative w-full h-48 sm:h-56 md:h-72 lg:h-80 overflow-hidden">
+          <div className="relative w-full h-72 lg:h-80 overflow-hidden">
             <SimpleBannerCarousel banners={banners} autoPlay interval={5000} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
           </div>
         ) : (
-          <div className="h-32 md:h-40 bg-gradient-to-br from-brand-green to-brand-green-dark" />
+          <div className="h-40 bg-gradient-to-br from-brand-green to-brand-green-dark" />
         )}
-
-        {/* Bloc identité + message Maroc */}
-        <div className="max-w-6xl mx-auto px-4 -mt-8 md:-mt-12 relative z-10">
-          <div className="bg-white rounded-2xl md:rounded-3xl shadow-lg border border-gray-100 p-5 md:p-8 text-center">
+        <div className="max-w-6xl mx-auto px-4 -mt-12 relative z-10">
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 text-center">
             <img
               src="/logo-principale.png"
               alt="AfrikRaga"
-              className="h-20 md:h-28 mx-auto mb-4 object-contain"
+              className="h-28 mx-auto mb-4 object-contain"
             />
-            <div className="inline-flex items-center gap-2 bg-brand-green-light rounded-full px-4 py-1.5 mb-4">
-              <span className="text-lg">🇲🇦</span>
-              <span className="text-sm font-semibold text-brand-green">Produits authentiques du Maroc</span>
-            </div>
-            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-3 leading-tight">
-              Huiles, savons, épices &amp; cosmétiques naturels
-            </h1>
-            <p className="text-gray-600 text-sm md:text-base max-w-2xl mx-auto mb-6 leading-relaxed">
-              Découvrez une sélection soignée d&apos;<strong className="text-brand-green">huiles essentielles</strong>,{' '}
-              <strong className="text-brand-green">savons artisanaux</strong>,{' '}
-              <strong className="text-brand-green">épices</strong> et{' '}
-              <strong className="text-brand-green">parfums authentiques</strong> importés directement du Maroc.
-            </p>
-            <Link
-              to="/catalog"
-              className="inline-flex items-center gap-2 bg-brand-orange hover:bg-brand-orange-dark text-white px-6 py-3 md:px-8 md:py-3.5 rounded-2xl font-semibold text-base transition-all shadow-md hover:shadow-lg hover:scale-[1.02]"
-            >
-              <Sparkles size={18} />
-              Découvrir la boutique
-              <ArrowRight size={18} />
-            </Link>
+            <HeroContent />
           </div>
         </div>
       </section>
 
-      {/* Catégories — scroll horizontal */}
+      {/* Catégories */}
       {categories.length > 0 && (
-        <section className="max-w-6xl mx-auto px-4 mt-8 md:mt-12">
+        <section className="max-w-6xl mx-auto px-4 mt-6 md:mt-12">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg md:text-xl font-bold text-gray-900">Nos catégories</h2>
             <Link to="/catalog" className="text-sm font-medium text-brand-green hover:text-brand-green-dark flex items-center gap-1">
@@ -206,17 +229,26 @@ const ModernHome = () => {
         </section>
       )}
 
-      {/* Produits populaires — grille */}
+      {/* Coups de cœur — carrousel mobile / grille desktop */}
       {popularProducts.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 mt-8 md:mt-12">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-1 md:mb-4">
             <h2 className="text-lg md:text-xl font-bold text-gray-900">Coups de cœur</h2>
             <Link to="/catalog" className="text-sm font-medium text-brand-orange hover:text-brand-orange-dark flex items-center gap-1">
               Voir plus <ArrowRight size={14} />
             </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {popularProducts.map((product) => (
+          <div className="md:hidden">
+            <ProductCarousel
+              products={popularProducts}
+              itemsPerSlide={2}
+              autoPlay
+              interval={3500}
+              dotColor="bg-brand-green"
+            />
+          </div>
+          <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 gap-4">
+            {popularProducts.slice(0, 8).map((product) => (
               <ProductCard key={product.id} product={product} showActions />
             ))}
           </div>
@@ -242,13 +274,20 @@ const ModernHome = () => {
         </div>
       </section>
 
-      {/* Nouveautés — grille */}
+      {/* Nouveautés — carrousel mobile / grille desktop */}
       {newProducts.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 mt-8 md:mt-12">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg md:text-xl font-bold text-gray-900">Nouveautés</h2>
+          <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1 md:mb-4">Nouveautés</h2>
+          <div className="md:hidden">
+            <ProductCarousel
+              products={newProducts}
+              itemsPerSlide={2}
+              autoPlay
+              interval={3000}
+              dotColor="bg-brand-orange"
+            />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="hidden md:grid grid-cols-3 lg:grid-cols-4 gap-4">
             {newProducts.map((product) => (
               <ProductCard key={product.id} product={product} showActions />
             ))}

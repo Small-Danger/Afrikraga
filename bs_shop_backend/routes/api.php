@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SuggestionController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\AdminCashierController;
 use App\Http\Controllers\Api\Pos\PosCashMovementController;
 use App\Http\Controllers\Api\Pos\PosCashSessionController;
 use App\Http\Controllers\Api\Pos\PosClientController;
@@ -160,6 +161,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/toggle-status', [CustomerController::class, 'toggleStatus']);
         Route::post('/bulk-action', [CustomerController::class, 'bulkAction']);
     });
+
+    // Personnel caisse (caissières)
+    Route::prefix('cashiers')->group(function () {
+        Route::get('/', [AdminCashierController::class, 'index']);
+        Route::post('/', [AdminCashierController::class, 'store']);
+        Route::put('/{id}', [AdminCashierController::class, 'update']);
+        Route::post('/{id}/toggle-status', [AdminCashierController::class, 'toggleStatus']);
+    });
     
                 // Gestion des bannières
             Route::prefix('banners')->middleware('large.upload')->group(function () {
@@ -197,6 +206,19 @@ Route::middleware(['auth:sanctum', 'pos'])->prefix('pos')->group(function () {
     Route::get('/pin/status', [PosPinController::class, 'hasPin']);
     Route::post('/set-pin', [PosPinController::class, 'setPin']);
     Route::post('/unlock', [PosPinController::class, 'unlock']);
+});
+
+// ========================================
+// SANTÉ API (monitoring / Railway healthcheck)
+// ========================================
+
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'service' => 'afrikraga-api',
+        'version' => '1.1.0-pos',
+        'timestamp' => now()->toIso8601String(),
+    ]);
 });
 
 // ========================================
